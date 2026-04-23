@@ -1,0 +1,95 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) - Dark Command Center Variant",
+  "typography": {
+    "font_strategy": "The 'Swiss Brutalist' / Developer UI",
+    "primary_font": "Chivo",
+    "secondary_font": "JetBrains Mono",
+    "heading_font_classes": "font-sans font-black tracking-tight",
+    "body_font_classes": "font-mono font-normal tracking-normal",
+    "data_font_classes": "font-mono font-medium tracking-tight",
+    "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-none",
+    "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight leading-tight",
+    "h3": "text-xl sm:text-2xl tracking-tight leading-snug",
+    "h4": "text-lg sm:text-xl tracking-tight",
+    "body": "text-sm md:text-base leading-relaxed text-slate-300",
+    "labels_overlines": "text-xs font-bold uppercase tracking-[0.2em] text-slate-400"
+  },
+  "colors": {
+    "background_base": "#090A0C",
+    "background_surface": "#121418",
+    "background_elevated": "#1A1D24",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#8B93A5",
+    "text_muted": "#565D6D",
+    "border_subtle": "#2A2D35",
+    "border_focus": "#0047FF",
+    "primary": {
+      "DEFAULT": "#0047FF",
+      "hover": "#336DFF",
+      "foreground": "#FFFFFF"
+    },
+    "heat_scale": {
+      "low": "#0047FF",
+      "medium": "#FFDD00",
+      "high": "#FF3333"
+    },
+    "status": {
+      "success": "#00E599",
+      "warning": "#FFDD00",
+      "error": "#FF3333",
+      "pending": "#8B93A5",
+      "running": "#0047FF"
+    }
+  },
+  "layout_and_spacing": {
+    "grid_strategy": "Mode B: The 'Control Room' Grid",
+    "container_padding": "p-6 md:p-8",
+    "gap_strategy": "gap-4 md:gap-6",
+    "widget_classes": "bg-[#121418] border border-[#2A2D35] rounded-none flex flex-col h-full overflow-hidden",
+    "header_strategy": "Solid Background with hard bottom border for data clarity. bg-[#090A0C] border-b border-[#2A2D35] z-50 sticky top-0"
+  },
+  "surface_strategies": {
+    "dashboard_cards": "Grid Borders (The Technical Look) - border-collapse style layout, sharp edges (rounded-none or max rounded-sm), no shadows. 1px solid borders.",
+    "job_queue_terminal": "Retro-Futurism (The Terminal Look) - Deep black bg, high-contrast monospace text, subtle 1px border.",
+    "world_map_overlays": "Glassmorphism (The Crystal Variant) - High opacity bg-black/80 with backdrop-blur-xl and 1px border-white/10 for tooltips and floating controls over the map."
+  },
+  "components": {
+    "buttons": "Sharp edges (rounded-none), solid high-contrast backgrounds, explicit hover states (e.g. hover:bg-white hover:text-black).",
+    "inputs_and_forms": "Shadcn components heavily customized. Flat, border-[#2A2D35], bg-[#090A0C], focus:ring-1 focus:ring-[#0047FF]. No rounded corners.",
+    "tabs": "Minimalist, border-b-2 indicator for active state, unstyled inactive states. Text color shifts on hover.",
+    "charts": "Plotly for 3D/Heatmaps, Recharts for standard line/bar trends. Use the heat_scale colors for probability gradients (0.0 to 1.0).",
+    "sliders": "Precision sliders with visible numeric input counterparts (critical for scientific tools)."
+  },
+  "icons_and_assets": {
+    "icon_library": "@phosphor-icons/react",
+    "icon_style": "Duotone or Regular weight, strictly for data/action indication.",
+    "images": {
+      "login_hero": {
+        "url": "https://images.pexels.com/photos/30596239/pexels-photo-30596239.jpeg",
+        "description": "Stunning crescent view of Earth at night. Used for Auth page background with a 60% black overlay."
+      },
+      "abstract_data_bg": {
+        "url": "https://images.unsplash.com/photo-1762279388979-6a430989284c",
+        "description": "Abstract lines and graphs. Used for empty states, loading screens, or marketing sections."
+      }
+    }
+  },
+  "motion_and_interactions": {
+    "hover_states": "Crisp, instantaneous changes or very fast transitions (150ms ease-out). Changes border colors or inverts button colors.",
+    "loading_states": "Terminal-style ASCII loaders or pure CSS minimal spinners. For scientific data sweeps, a precise progress bar is mandatory.",
+    "data_transitions": "Plotly heatmaps must animate smoothly when the time-slider is dragged."
+  },
+  "accessibility_and_testing": {
+    "contrast": "Minimum 4.5:1 for standard text. All hover/focus states must increase contrast.",
+    "test_ids": "All interactive elements (calculators, sweep builders, job monitors) MUST have 'data-testid' attributes (e.g., 'ibp-calculate-btn', 'param-sweep-submit')."
+  },
+  "instructions_to_main_agent": [
+    "Install dependencies: @phosphor-icons/react, plotly.js, react-plotly.js, recharts.",
+    "Do NOT use 'Inter' for headings. Configure Chivo and JetBrains Mono via Google Fonts.",
+    "Ensure the Dashboard uses the 'Control Room Grid' with strict 1px borders and sharp corners.",
+    "For the Interactive Results Viewer, implement Plotly for the longitude-vs-local-time heatmap.",
+    "All components MUST utilize the specific HEX codes defined in the colors section to maintain the technical, scientific aesthetic.",
+    "Ensure 'data-testid' is added to every form field, button, and key metric display."
+  ]
+}
