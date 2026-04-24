@@ -63,7 +63,7 @@ export default function Compare() {
           <select value={a} onChange={(e) => setA(e.target.value)} data-testid="compare-a"
             className="w-full bg-[#090A0C] border border-[#2A2D35] focus:border-[#0047FF] outline-none px-3 h-11 mono text-sm">
             <option value="">Select a completed job…</option>
-            {jobs.map((j) => <option key={j.id} value={j.id}>{j.id.slice(0,8)} · {j.name || 'unnamed'} · {j.cells} cells</option>)}
+            {jobs.map((j) => <option key={j.id} value={j.id}>{`${j.id.slice(0,8)} · ${j.name || 'unnamed'} · ${j.cells} cells`}</option>)}
           </select>
         </div>
         <ArrowsLeftRight size={20} className="text-[#0047FF] mb-3 hidden md:block" />
@@ -72,7 +72,7 @@ export default function Compare() {
           <select value={b} onChange={(e) => setB(e.target.value)} data-testid="compare-b"
             className="w-full bg-[#090A0C] border border-[#2A2D35] focus:border-[#0047FF] outline-none px-3 h-11 mono text-sm">
             <option value="">Select a completed job…</option>
-            {jobs.map((j) => <option key={j.id} value={j.id}>{j.id.slice(0,8)} · {j.name || 'unnamed'} · {j.cells} cells</option>)}
+            {jobs.map((j) => <option key={j.id} value={j.id}>{`${j.id.slice(0,8)} · ${j.name || 'unnamed'} · ${j.cells} cells`}</option>)}
           </select>
         </div>
         <button onClick={run} disabled={!a || !b || a === b || loading} data-testid="compare-run"

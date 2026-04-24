@@ -79,6 +79,8 @@ class JobOut(BaseModel):
     completed_at: Optional[str] = None
     error: Optional[str] = None
     summary: Optional[dict] = None
+    worker: Optional[str] = None
+    task_id: Optional[str] = None
 
 
 # ---------- Experiments ----------

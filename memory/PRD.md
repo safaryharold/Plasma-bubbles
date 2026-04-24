@@ -15,7 +15,7 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 - **SaaS hooks**: API keys (SHA-256 hashed, last-used tracking, call counter, revoke); in-memory sliding-window rate limiter per role; usage counters in user doc.
 - **Frontend**: React 19 + Tailwind + Plotly (plotly.js-cartesian-dist-min) + Phosphor icons. Dark Command Center theme (Chivo + JetBrains Mono).
 
-## Implemented (2026-04-24)
+## Implemented (2026-04-24) — v1.0 MVP
 - [x] JWT auth (register/login/me/logout) with 3 roles
 - [x] Single-point IBP calculator (/calculator)
 - [x] Parameter sweep builder + async job (/sweep) with 10k-cell grid cap
@@ -31,7 +31,14 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 - [x] Confidence score + anomaly detection flag on single-point results
 - [x] Rate limiter with per-role minute + daily quotas
 - [x] data-testid coverage across all interactive elements
-- [x] 25/25 backend pytest cases passing + frontend e2e verified
+
+## Implemented — v1.1 (2026-04-24 evening)
+- [x] Removed role/tier selector from `/register` — all logged-in users get full access
+- [x] **World-map page** (/worldmap) with Plotly scattergeo + 48-frame local-time slider (0.5h step) + play/pause animation
+- [x] **Celery + Redis** compute backend (supervisor-managed) with in-process `BackgroundTasks` fallback. Live `/api/ibp/queue/stats` telemetry
+- [x] **Multi-format exports**: CSV + NetCDF (xarray) + Parquet (pyarrow) via `/api/ibp/download/{id}?format=...`
+- [x] **Public share links** for A/B comparisons — `POST /api/share/compare` → public `/s/:token` page (no auth) with view-count tracking
+- [x] Landing pricing section updated: "free for the whole research community"
 
 ## Deferred / Backlog
 
