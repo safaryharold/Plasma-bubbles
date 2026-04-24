@@ -155,7 +155,7 @@ async def get_job(job_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.get("/visualization-data/{job_id}")
-async def viz(job_id: str, user: dict = Depends(get_current_user)):
+async def viz(job_id: str, smooth: int = 1, user: dict = Depends(get_current_user)):
     db = get_db()
     job = await db.ibp_jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
@@ -165,11 +165,21 @@ async def viz(job_id: str, user: dict = Depends(get_current_user)):
     if job["status"] != "COMPLETED":
         raise HTTPException(status_code=409, detail=f"Job status is {job['status']}")
     res = job["result"]
-    return {
+    payload = {
         "job_id": job_id, "config_hash": job["config_hash"], "params": job["params"],
         "lons": res["lons"], "lts": res["lts"], "matrix": res["matrix"],
         "doy": res["doy"], "month": res["month"], "summary": job["summary"],
     }
+    if smooth:
+        upscale = 3 if len(res["lons"]) * len(res["lts"]) <= 400 else 2
+        if len(res["lons"]) * len(res["lts"]) > 2500:
+            upscale = 1
+        if upscale > 1:
+            payload["smooth"] = ibp_service.smooth_surface(res["lons"], res["lts"], res["matrix"], upscale=upscale)
+        else:
+            payload["smooth"] = {"lons": res["lons"], "lts": res["lts"],
+                                 "matrix": res["matrix"], "method": "raw (large grid)"}
+    return payload
 
 
 # --- Multi-format download ---
@@ -266,37 +276,18 @@ async def usage(user: dict = Depends(get_current_user)):
     return rate_limit.usage(user)
 
 
-# --- Global IBP world map (for time-slider viz) ---
+# --- Global IBP world map (for time-slider viz with lat extrapolation) ---
 @router.get("/worldmap")
 async def worldmap(day_month: int = 3, f107: float = 150.0, lon_step: float = 10.0,
-                   user: dict = Depends(get_current_user)):
-    """Pre-compute global IBP across longitude × local-time for time-slider animation.
+                   lat_step: float = 2.0, user: dict = Depends(get_current_user)):
+    """Pre-compute global IBP as 2-D (lat × lon) overlay frames per LT.
 
-    Returns a list of frames (one per LT step) suitable for Plotly scattergeo.
+    Uses scikit-learn GPR + physical magnetic-equator envelope to extrapolate
+    IBP beyond the equator for a proper heatmap overlay.
     """
     rate_limit.check(user)
     if not (60 <= f107 <= 300) or not (1 <= day_month <= 366) or not (1 <= lon_step <= 60):
         raise HTTPException(status_code=400, detail="invalid params")
-    lt_values = [round(x * 0.5, 2) for x in range(0, 48)]  # 0.0 .. 23.5
-    lons = list(range(-180, 181, int(lon_step)))
-    df = ibp_service.calculate(day_month, lons, lt_values, f107)
-    # Build a lookup: {lt: [ibp per lon]}
-    frames = []
-    for t in lt_values:
-        sub = df[df["LT"] == t]
-        # ensure sorted by longitude
-        sub_sorted = sub.sort_values("Lon")
-        frames.append({
-            "lt": t,
-            "lons": sub_sorted["Lon"].astype(float).tolist(),
-            "ibp": sub_sorted["IBP"].astype(float).tolist(),
-        })
-    return {
-        "day_month": day_month,
-        "f107": f107,
-        "doy": int(df.iloc[0]["Doy"]),
-        "month": int(df.iloc[0]["Month"]),
-        "lons": lons,
-        "lt_values": lt_values,
-        "frames": frames,
-    }
+    if not (0.5 <= lat_step <= 10):
+        raise HTTPException(status_code=400, detail="lat_step must be 0.5..10")
+    return ibp_service.worldmap_grid(day_month, f107, lon_step, lat_half_range=25.0, lat_step=lat_step)

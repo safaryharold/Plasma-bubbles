@@ -1,16 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { api, formatApiError } from "../lib/api";
 import createPlotlyComponent from "react-plotly.js/factory";
-import Plotly from "plotly.js-geo-dist-min";
+import Plotly from "plotly.js-dist-min";
 import { Slider } from "../components/ui/slider";
 import { Globe, Lightning, Play, Pause } from "@phosphor-icons/react";
 
 const Plot = createPlotlyComponent(Plotly);
-
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+function classify(ibp) {
+  if (ibp >= 0.6) return "HIGH bubble risk";
+  if (ibp >= 0.3) return "Moderate risk";
+  if (ibp >= 0.1) return "Low risk";
+  return "Negligible";
+}
+
 export default function WorldMap() {
-  const [params, setParams] = useState({ day_month: 3, f107: 150, lon_step: 10 });
+  const [params, setParams] = useState({ day_month: 3, f107: 150, lon_step: 10, lat_step: 2 });
   const [data, setData] = useState(null);
   const [ltIndex, setLtIndex] = useState(42); // LT 21:00
   const [playing, setPlaying] = useState(false);
@@ -26,16 +32,61 @@ export default function WorldMap() {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  // auto-play
   useEffect(() => {
     if (!playing || !data) return;
     const id = setInterval(() => {
       setLtIndex((i) => (i + 1) % data.lt_values.length);
-    }, 220);
+    }, 260);
     return () => clearInterval(id);
   }, [playing, data]);
 
-  const frame = data?.frames[ltIndex];
+  // Build dense scattergeo overlay from the 2-D (lat × lon) matrix
+  const overlayTraces = React.useMemo(() => {
+    if (!data) return [];
+    const frame = data.frames[ltIndex];
+    if (!frame) return [];
+    const lats = []; const lons = []; const values = []; const hover = [];
+    for (let i = 0; i < data.lats.length; i++) {
+      for (let j = 0; j < data.lons.length; j++) {
+        const v = frame.matrix[i][j];
+        if (v < 0.015) continue; // skip near-zero for cleaner overlay
+        lats.push(data.lats[i]);
+        lons.push(data.lons[j]);
+        values.push(v);
+        hover.push(
+          `Lat ${data.lats[i].toFixed(1)}°<br>` +
+          `Lon ${data.lons[j]}°<br>` +
+          `IBP ${v.toFixed(3)}<br>` +
+          `${classify(v)}`
+        );
+      }
+    }
+    // Scale marker size by resolution so cells overlap and appear continuous
+    const markerSize = 18 - Math.min(8, (data.lons.length + data.lats.length) / 6);
+    return [{
+      type: "scattergeo",
+      lon: lons, lat: lats,
+      mode: "markers",
+      marker: {
+        color: values,
+        colorscale: [[0, "#0047FF"], [0.35, "#336DFF"], [0.55, "#FFDD00"], [0.8, "#FF3333"], [1, "#FF3333"]],
+        cmin: 0, cmax: 1,
+        size: markerSize,
+        symbol: "square",
+        opacity: 0.55,
+        line: { width: 0 },
+        colorbar: {
+          thickness: 10, outlinewidth: 0, len: 0.85,
+          tickfont: { family: "JetBrains Mono, monospace", size: 10, color: "#8B93A5" },
+          title: { text: "IBP", font: { color: "#8B93A5", family: "JetBrains Mono", size: 10 } },
+        },
+      },
+      hovertext: hover,
+      hoverinfo: "text",
+      name: "IBP overlay",
+    }];
+  }, [data, ltIndex]);
+
   const lt = data?.lt_values[ltIndex];
 
   return (
@@ -46,11 +97,12 @@ export default function WorldMap() {
           <Globe size={28} className="text-[#0047FF]" /> World Map
         </h1>
         <p className="mono text-xs text-[#8B93A5] mt-2">
-          Global IBP distribution with local-time slider. Each frame = 30min LT step along the equatorial belt.
+          IBP extrapolated to the ±25° equatorial belt using scikit-learn Gaussian-Process regression over a
+          physics-informed magnetic-equator envelope. Drag the slider for the 24-hour LT evolution.
         </p>
       </div>
 
-      <div className="border border-[#2A2D35] p-5 grid md:grid-cols-[1fr_1fr_1fr_auto] gap-4 items-end" data-testid="worldmap-form">
+      <div className="border border-[#2A2D35] p-5 grid md:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-end" data-testid="worldmap-form">
         <Field label="Day / Month (1-12 month, 13-366 DOY)">
           <input type="number" min={1} max={366} value={params.day_month}
             data-testid="wm-daymonth"
@@ -69,49 +121,36 @@ export default function WorldMap() {
             onChange={(e) => setParams({ ...params, lon_step: Number(e.target.value) })}
             className="w-full bg-[#090A0C] border border-[#2A2D35] focus:border-[#0047FF] outline-none px-3 h-11 mono text-sm" />
         </Field>
+        <Field label="Latitude step (°)">
+          <input type="number" min={0.5} max={10} step={0.5} value={params.lat_step}
+            data-testid="wm-latstep"
+            onChange={(e) => setParams({ ...params, lat_step: Number(e.target.value) })}
+            className="w-full bg-[#090A0C] border border-[#2A2D35] focus:border-[#0047FF] outline-none px-3 h-11 mono text-sm" />
+        </Field>
         <button onClick={load} disabled={loading} data-testid="wm-run"
           className="h-11 px-5 bg-[#0047FF] hover:bg-[#336DFF] text-white mono text-xs uppercase tracking-[0.25em] flex items-center gap-2 transition-colors disabled:opacity-40">
-          <Lightning size={14} weight="fill" /> {loading ? "Loading..." : "Compute"}
+          <Lightning size={14} weight="fill" /> {loading ? "Computing..." : "Compute"}
         </button>
       </div>
 
       {err && <div className="mono text-xs text-[#FF3333] border border-[#FF3333]/40 bg-[#FF3333]/5 px-3 py-2" data-testid="wm-error">{err}</div>}
 
-      {data && frame && (
+      {data && (
         <div className="border border-[#2A2D35] bg-[#090A0C]">
           <div className="flex items-center justify-between px-4 h-10 border-b border-[#2A2D35]">
             <div className="mono text-[10px] uppercase tracking-[0.25em] text-[#8B93A5]">
-              — global ibp • {MONTHS[data.month - 1]} · doy {data.doy} · f10.7 {data.f107}
+              — global ibp • {MONTHS[data.month - 1]} · doy {data.doy} · f10.7 {data.f107} · extrapolation: {data.method}
             </div>
             <div className="mono text-xs text-[#0047FF]" data-testid="wm-lt-display">
               LT {lt?.toFixed(1)}h
             </div>
           </div>
           <Plot
-            data={[{
-              type: "scattergeo",
-              lon: frame.lons,
-              lat: frame.lons.map(() => 0),  // equatorial belt
-              mode: "markers",
-              marker: {
-                color: frame.ibp,
-                colorscale: [[0, "#0047FF"], [0.5, "#FFDD00"], [1, "#FF3333"]],
-                cmin: 0, cmax: 1,
-                size: 14,
-                line: { width: 0.5, color: "#090A0C" },
-                colorbar: {
-                  thickness: 8, outlinewidth: 0,
-                  tickfont: { family: "JetBrains Mono, monospace", size: 10, color: "#8B93A5" },
-                  title: { text: "IBP", font: { color: "#8B93A5", family: "JetBrains Mono", size: 10 } },
-                },
-              },
-              hovertext: frame.lons.map((lo, i) => `Lon ${lo}° • IBP ${frame.ibp[i].toFixed(3)}`),
-              hoverinfo: "text",
-            }]}
+            data={overlayTraces}
             layout={{
               paper_bgcolor: "#090A0C", plot_bgcolor: "#090A0C",
-              margin: { l: 0, r: 0, t: 10, b: 10 },
-              height: 520,
+              margin: { l: 0, r: 0, t: 6, b: 6 },
+              height: 560,
               geo: {
                 projection: { type: "equirectangular" },
                 showland: true, landcolor: "#121418",
@@ -119,13 +158,14 @@ export default function WorldMap() {
                 showcountries: true, countrycolor: "#2A2D35",
                 showcoastlines: true, coastlinecolor: "#2A2D35",
                 showframe: false,
-                lataxis: { range: [-40, 40] },
+                lataxis: { range: [-45, 45], showgrid: true, gridcolor: "#1A1D24" },
+                lonaxis: { showgrid: true, gridcolor: "#1A1D24" },
                 bgcolor: "#090A0C",
               },
             }}
             config={{ displaylogo: false, responsive: true,
               modeBarButtonsToRemove: ["lasso2d", "select2d"] }}
-            style={{ width: "100%", height: 520 }}
+            style={{ width: "100%", height: 560 }}
             useResizeHandler
           />
           <div className="p-4 border-t border-[#2A2D35] space-y-3" data-testid="wm-slider-container">

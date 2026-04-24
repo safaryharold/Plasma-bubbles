@@ -477,30 +477,83 @@ class TestMultiFormatDownload:
         assert r.status_code == 400
 
 
-# ---------- v1.1: World map ----------
+# ---------- v1.2: World map (2-D lat x lon frames) ----------
 class TestWorldmap:
-    def test_worldmap_shape(self, researcher):
+    def test_worldmap_2d_shape(self, researcher):
         headers = {"Authorization": f"Bearer {researcher['token']}"}
-        r = requests.get(f"{API}/ibp/worldmap?day_month=3&f107=150&lon_step=30",
-                         headers=headers, timeout=30)
+        r = requests.get(f"{API}/ibp/worldmap?day_month=3&f107=150&lon_step=20&lat_step=3",
+                         headers=headers, timeout=60)
         assert r.status_code == 200, r.text
         d = r.json()
-        for k in ("frames", "lt_values", "lons", "doy", "month"):
+        for k in ("frames", "lt_values", "lons", "lats", "doy", "month", "method"):
             assert k in d, f"missing {k}"
+        # v1.2 additions
+        assert isinstance(d["lats"], list) and len(d["lats"]) > 0, "lats must be non-empty (v1.2)"
+        assert "sklearn.GPR" in d["method"], d["method"]
         assert len(d["lt_values"]) == 48
         assert len(d["frames"]) == 48
-        # Each frame should have lt, lons, ibp
+        # Each frame matrix is 2-D lats x lons
         f0 = d["frames"][0]
-        for k in ("lt", "lons", "ibp"):
-            assert k in f0
-        assert len(f0["lons"]) == len(f0["ibp"])
-        assert len(f0["lons"]) == len(d["lons"])
+        assert "lt" in f0 and "matrix" in f0
+        mat = f0["matrix"]
+        assert len(mat) == len(d["lats"]), "rows must equal len(lats)"
+        assert len(mat[0]) == len(d["lons"]), "cols must equal len(lons)"
+        # Sanity: values bounded 0..1
+        flat = [v for row in mat for v in row]
+        assert min(flat) >= 0.0 and max(flat) <= 1.0
 
-    def test_worldmap_invalid_params(self, researcher):
+    def test_worldmap_invalid_daymonth(self, researcher):
         headers = {"Authorization": f"Bearer {researcher['token']}"}
         r = requests.get(f"{API}/ibp/worldmap?day_month=500&f107=150&lon_step=30",
                          headers=headers, timeout=10)
         assert r.status_code in (400, 422)
+
+    def test_worldmap_invalid_lat_step_high(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/worldmap?day_month=3&f107=150&lon_step=30&lat_step=15",
+                         headers=headers, timeout=10)
+        assert r.status_code == 400
+
+    def test_worldmap_invalid_lat_step_low(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/worldmap?day_month=3&f107=150&lon_step=30&lat_step=0.1",
+                         headers=headers, timeout=10)
+        assert r.status_code == 400
+
+
+# ---------- v1.2: Smooth 3-D surface payload ----------
+class TestSmoothSurface:
+    def test_visualization_smooth_payload(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        # Small grid (~90 cells) so upscale kicks in
+        payload = {"name": "TEST_smooth", "day_month": 3, "f107": 150,
+                   "lon_min": -60, "lon_max": 60, "lon_step": 30,
+                   "lt_min": 18, "lt_max": 24, "lt_step": 1.0}
+        r = requests.post(f"{API}/ibp/batch", headers=headers, json=payload, timeout=10)
+        assert r.status_code == 200
+        job_id = r.json()["id"]
+        done = _poll_job(researcher["token"], job_id, timeout=45)
+        assert done and done["status"] == "COMPLETED"
+
+        r = requests.get(f"{API}/ibp/visualization-data/{job_id}?smooth=1",
+                         headers=headers, timeout=30)
+        assert r.status_code == 200, r.text
+        v = r.json()
+        assert "smooth" in v, "smooth object missing"
+        s = v["smooth"]
+        for k in ("lons", "lts", "matrix", "method"):
+            assert k in s, f"smooth missing {k}"
+        assert s["method"].startswith("sklearn.GaussianProcessRegressor"), s["method"]
+        # Smooth grid must be 2x-3x denser than raw
+        raw_cells = len(v["lons"]) * len(v["lts"])
+        smooth_cells = len(s["lons"]) * len(s["lts"])
+        assert smooth_cells > raw_cells, f"smooth {smooth_cells} not denser than raw {raw_cells}"
+        # Matrix dims match
+        assert len(s["matrix"]) == len(s["lons"])
+        assert len(s["matrix"][0]) == len(s["lts"])
+        # Values clipped 0..1
+        flat = [x for row in s["matrix"] for x in row]
+        assert min(flat) >= 0.0 and max(flat) <= 1.0
 
 
 # ---------- v1.1: Share flow ----------

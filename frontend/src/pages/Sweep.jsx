@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { api, formatApiError } from "../lib/api";
-import { Heatmap, HotspotBars } from "../components/Plot";
+import { Surface3D, HotspotBars } from "../components/Plot";
 import { Lightning, DownloadSimple, FloppyDisk, ArrowClockwise } from "@phosphor-icons/react";
 
 export default function Sweep() {
@@ -161,9 +161,14 @@ export default function Sweep() {
             </div>
           ) : viz ? (
             <div className="flex-1 flex flex-col">
-              <Heatmap lons={viz.lons} lts={viz.lts} matrix={viz.matrix}
-                title={`IBP heatmap • ${viz.lons.length} × ${viz.lts.length} cells • hash ${job.config_hash}`}
-                height={360} />
+              <Surface3D
+                lons={viz.smooth?.lons || viz.lons}
+                lts={viz.smooth?.lts || viz.lts}
+                matrix={viz.smooth?.matrix || viz.matrix}
+                title={`IBP 3-D surface • ${viz.lons.length}×${viz.lts.length} cells · hash ${job.config_hash}`}
+                method={viz.smooth?.method ? `smoothed via ${viz.smooth.method}` : undefined}
+                height={420}
+              />
               <div className="grid grid-cols-2 gap-0 border-t border-[#2A2D35]">
                 <div className="p-4 border-r border-[#2A2D35]">
                   <div className="mono text-[10px] uppercase tracking-[0.25em] text-[#565D6D] mb-2">— summary stats</div>

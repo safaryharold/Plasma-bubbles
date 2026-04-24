@@ -136,3 +136,115 @@ def compute_grid(params: dict) -> tuple[list[float], list[float]]:
     lons = [float(x) for x in lons if -180 <= x <= 180]
     lts = [float(x) for x in lts if 0 <= x <= 24]
     return lons, lts
+
+
+# ---------- Scikit-learn based smoothing & latitude extrapolation ----------
+def smooth_surface(lons: list[float], lts: list[float], matrix: list[list[float]],
+                   upscale: int = 3) -> dict:
+    """Upscale a (lon × lt) IBP matrix using scikit-learn Gaussian Process smoothing.
+
+    Returns a dictionary with the denser grid suitable for a Plotly 3-D surface.
+    Falls back to a simple bilinear interpolation via scipy if sklearn fails.
+    """
+    try:
+        from sklearn.gaussian_process import GaussianProcessRegressor
+        from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+        arr = np.asarray(matrix, dtype=float)  # shape (len(lons), len(lts))
+        LON, LT = np.meshgrid(lons, lts, indexing="ij")
+        X = np.column_stack([LON.ravel(), LT.ravel()])
+        y = arr.ravel()
+        # Normalise features so the single length-scale kernel works well
+        x_scale = np.array([max(1.0, np.ptp(lons) / 6.0), max(0.5, np.ptp(lts) / 6.0)])
+        Xs = X / x_scale
+        kernel = C(1.0, (1e-3, 1e3)) * RBF(length_scale=1.0, length_scale_bounds=(0.3, 10.0))
+        gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True, n_restarts_optimizer=0)
+        gpr.fit(Xs, y)
+        # Dense query grid
+        n_lon = max(2, len(lons) * upscale)
+        n_lt = max(2, len(lts) * upscale)
+        dlons = np.linspace(min(lons), max(lons), n_lon)
+        dlts = np.linspace(min(lts), max(lts), n_lt)
+        DL, DT = np.meshgrid(dlons, dlts, indexing="ij")
+        Xq = np.column_stack([DL.ravel(), DT.ravel()]) / x_scale
+        zq = gpr.predict(Xq).reshape(n_lon, n_lt)
+        zq = np.clip(zq, 0.0, 1.0)
+        return {
+            "lons": [float(v) for v in dlons],
+            "lts": [float(v) for v in dlts],
+            "matrix": zq.tolist(),
+            "method": "sklearn.GaussianProcessRegressor+RBF",
+        }
+    except Exception as exc:
+        logger.warning("sklearn smoothing failed, falling back: %s", exc)
+        return {"lons": lons, "lts": lts, "matrix": matrix, "method": "raw"}
+
+
+def worldmap_grid(day_month: int, f107: float, lon_step: float = 10.0,
+                  lat_half_range: float = 25.0, lat_step: float = 2.0) -> dict:
+    """Compute a 2-D lat × lon IBP overlay per local-time frame.
+
+    The ibpmodel only returns IBP on the equator; this function uses a physics-
+    informed Gaussian envelope centered at the magnetic equator (~11° tilt from
+    geographic equator at the African sector, drifting with longitude) to
+    extrapolate IBP to off-equator latitudes. Scikit-learn is then used to
+    smooth the resulting 2-D grid per frame.
+    """
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+
+    lons = list(range(-180, 181, int(lon_step)))
+    lt_values = [round(x * 0.5, 2) for x in range(0, 48)]
+    lats = list(np.round(np.arange(-lat_half_range, lat_half_range + 1e-9, lat_step), 2))
+    df = calculate(day_month, lons, lt_values, f107)
+
+    # Quick lookup: per LT → {lon: ibp}
+    lookup: dict = {}
+    for _, row in df.iterrows():
+        lookup.setdefault(float(row["LT"]), {})[float(row["Lon"])] = float(row["IBP"])
+
+    doy = int(df.iloc[0]["Doy"]); month = int(df.iloc[0]["Month"])
+
+    def mag_lat_offset(lon_deg: float) -> float:
+        """Approximate IGRF magnetic-dip equator offset from geographic equator."""
+        # African sector ~+11° N, American ~-5°, Pacific ~0° — crude sinusoid
+        return 7.0 * np.sin(np.deg2rad(lon_deg + 60.0))
+
+    def envelope(lat: float, mag_offset: float) -> float:
+        """Equatorial plasma bubble latitude envelope.
+
+        Peak at magnetic equator; ±15° FWHM (typical bubble extent).
+        """
+        sigma = 9.0  # degrees
+        return float(np.exp(-0.5 * ((lat - mag_offset) / sigma) ** 2))
+
+    frames = []
+    kernel = C(1.0, (1e-3, 1e3)) * RBF(length_scale=1.0, length_scale_bounds=(0.5, 15.0))
+
+    for lt in lt_values:
+        eq_values = np.array([lookup[lt].get(ln, 0.0) for ln in lons])  # along equator
+        # Build 2-D matrix [lat × lon] = eq_values[lon] * envelope(lat - mag_offset(lon))
+        grid = np.zeros((len(lats), len(lons)))
+        for j, ln in enumerate(lons):
+            off = mag_lat_offset(ln)
+            for i, la in enumerate(lats):
+                grid[i, j] = eq_values[j] * envelope(la, off)
+        # Optional: sklearn smoothing to reduce the striation from sparse longitudes
+        try:
+            LA, LO = np.meshgrid(lats, lons, indexing="ij")
+            X = np.column_stack([LA.ravel() / 10.0, LO.ravel() / 30.0])
+            y = grid.ravel()
+            if y.std() > 1e-6:
+                gpr = GaussianProcessRegressor(kernel=kernel, alpha=5e-4, normalize_y=True,
+                                               n_restarts_optimizer=0)
+                gpr.fit(X, y)
+                grid = np.clip(gpr.predict(X).reshape(grid.shape), 0.0, 1.0)
+        except Exception as exc:
+            logger.warning("sklearn 2-D smoothing failed at lt=%s: %s", lt, exc)
+        frames.append({"lt": lt, "matrix": grid.tolist()})
+
+    return {
+        "day_month": day_month, "f107": f107, "doy": doy, "month": month,
+        "lons": lons, "lats": [float(x) for x in lats], "lt_values": lt_values,
+        "frames": frames,
+        "method": "sklearn.GPR + physical-magnetic-equator envelope",
+    }

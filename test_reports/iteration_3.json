@@ -1,0 +1,44 @@
+{
+  "summary": "v1.2 visualization upgrade validated. Backend pytest suite upgraded to 44 tests (was 41) — ALL 44 PASS against the live preview URL. Added 3 new tests + rewrote TestWorldmap for the v1.2 2-D (lats×lons) frame shape + method='sklearn.GPR + physical-magnetic-equator envelope', and added TestSmoothSurface to verify GET /ibp/visualization-data/{id}?smooth=1 returns a top-level 'smooth' object whose method starts with 'sklearn.GaussianProcessRegressor' and whose grid is strictly denser than the raw grid. lat_step validation (0.5..10) is enforced (400 for 0.1 and 15). All regression tests (auth, calculate, batch, downloads CSV/NetCDF/Parquet, compare, experiments, API keys, admin, share flow) still pass unchanged. Frontend: data-testid coverage verified via grep (plot-surface, plot-heatmap, wm-latstep, sweep-page, compare-page, etc. are all present). Partial frontend browser-automation session completed: WorldMap form renders with the new LATITUDE STEP input, /worldmap triggered compute successfully (UI shows 'COMPUTING...' while the GPR-heavy endpoint runs — ~45-70s for lon_step=10/lat_step=3). All 4 regression pages (/dashboard /experiments /keys /admin) load without errors. Full end-to-end UI capture of a rendered Plotly 3-D surface + dense scattergeo overlay + classification hover was interrupted by a flaky admin-login rate limiter in the browser-automation harness (backend login via requests works fine; UI login intermittently stayed on 'AUTHENTICATING...'). Main agent can quickly self-verify the three UI hotspots.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ibp/batch", "issue": "Pre-existing from v1.1: JobOut pydantic model still does not expose the 'worker'/'task_id' fields (persisted in Mongo, not returned by API). Not a v1.2 regression."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Self-verify) Main agent: open /worldmap as admin, set lon_step=30 lat_step=5 (smaller grid finishes in ~15s), confirm the map shows a DENSE semi-transparent square overlay spanning ~±25° latitude (not a single line on the equator) and that hovering a cell shows Lat/Lon/IBP + classification (HIGH/Moderate/Low/Negligible).",
+    "(Self-verify) Main agent: open /sweep, run with defaults, confirm the result panel has data-testid='plot-surface' and displays a 3-D surface (scene div with axes Lon/LT/IBP), not a 2-D heatmap. Hover string should include 'Lon', 'LT', 'IBP'.",
+    "(Self-verify) Main agent: open /compare with two completed jobs and confirm three plot-surface panels render (A, B, A−B).",
+    "(Optional) If /worldmap with default lon_step=10 + lat_step=2 feels slow (~45-70s), consider raising the default lat_step to 3 or reducing to lon_step=15 by default in WorldMap.jsx so the first paint is faster. Current default is fine, just slow."
+  ],
+  "critical_code_review_comments": [
+    "ibp_service.smooth_surface(): correct use of GPR with RBF+ConstantKernel, feature scaling applied, output clipped to [0,1], graceful fallback to raw on exception — solid.",
+    "ibp_service.worldmap_grid(): correctly constructs a 2-D (lat×lon) frame per LT, applies physical magnetic-equator offset (mag_lat_offset) + envelope, then GPR smoothing. Returns 48 frames with method tag. Shape verified in tests.",
+    "routes_ibp.worldmap: lat_step validation [0.5,10] returns 400 as specified; existing day_month/f107/lon_step validation retained.",
+    "routes_ibp.visualization-data: upscale factor is correctly capped (3 for <=400 cells, 2 for <=2500, 1 otherwise) preventing pathological sklearn fits on large grids.",
+    "Plot.jsx: Surface3D component wraps Plotly type='surface' with contours and hovertemplate per spec. data-testid='plot-surface' present; heatmap fallback retained.",
+    "WorldMap.jsx: wm-latstep input is wired to state and passed as lat_step to backend. Scattergeo uses semi-transparent square markers. Slider animates LT — no regressions.",
+    "package.json swap to plotly.js-dist-min is correct (required for 'surface' support; geo-dist-min does not include 3-D). NODE_OPTIONS=--max-old-space-size=4096 in scripts prevents bundler OOM.",
+    "Pre-existing minor (v1.1 carry-over): JobOut model still strips 'worker'/'task_id'; still not fixed in v1.2 (harmless for this iteration)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (44/44 pytest)", "frontend": "Static / data-testid + regression verified; live 3-D render + hover not captured end-to-end in browser-automation due to session-level login flakiness (backend login works; UI needs main-agent self-verify)"},
+  "test_credentials": "Admin admin@ibp.dev / admin123 (seeded & verified via backend). UI login intermittently stayed on AUTHENTICATING — retry or inject token via the app's auth provider if automating.",
+  "seed_data_creation": "Tests create TEST_-prefixed sweeps/experiments/keys/shares under ephemeral researcher users. No production data modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend base URL: https://ibp-analytics.preview.emergentagent.com (from frontend/.env). Run: `pytest /app/backend/tests/backend_test.py -v` — all 44 pass in ~30s. For v1.2: TestSmoothSurface covers ?smooth=1 payload (method starts with 'sklearn.GaussianProcessRegressor', strictly denser grid); TestWorldmap covers 2-D frame shape (lats×lons), non-empty lats, method containing 'sklearn.GPR', and lat_step validation (0.1→400, 15→400, 3→200). For /worldmap UI testing, use lon_step=30 + lat_step=5 (finishes ~15s) rather than the default (~60s) — browser-automation timeouts with the default. Admin-login rate-limiter can lock out UI login after 4-5 rapid attempts; wait 60s between iterations or inject a JWT via the auth provider.",
+  "rca of the issue": "No v1.2 defects. The only frontend-automation failure was environmental: the brute-force-lockout-style rate limiter on /api/auth/login tripped after multiple rapid admin login attempts in the automation harness, causing subsequent click-login flows to stall on 'AUTHENTICATING...'. Backend behaves correctly (200 when called via requests). Not a bug in v1.2 code."
+}

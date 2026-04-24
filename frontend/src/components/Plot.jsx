@@ -1,6 +1,6 @@
 import React from "react";
 import createPlotlyComponent from "react-plotly.js/factory";
-import Plotly from "plotly.js-geo-dist-min";
+import Plotly from "plotly.js-dist-min";
 const Plot = createPlotlyComponent(Plotly);
 
 const AXIS = {
@@ -10,36 +10,107 @@ const AXIS = {
   linecolor: "#2A2D35",
 };
 
-export function Heatmap({ lons, lts, matrix, title, diff = false, height = 460 }) {
+const AXIS3D = {
+  ...AXIS,
+  showbackground: true, backgroundcolor: "#090A0C",
+  gridcolor: "#2A2D35", zerolinecolor: "#2A2D35",
+};
+
+function classify(ibp) {
+  if (ibp >= 0.6) return "HIGH bubble risk";
+  if (ibp >= 0.3) return "Moderate risk";
+  return "Low risk";
+}
+
+/**
+ * 3-D surface of IBP over Longitude × Local-Time, built from the
+ * sklearn-smoothed grid coming from /api/ibp/visualization-data.
+ */
+export function Surface3D({ lons, lts, matrix, title, diff = false, height = 500, method }) {
+  // surface expects z shape [len(y), len(x)] with y=lts, x=lons
+  const z = lts.map((_, j) => lons.map((_, i) => matrix[i][j]));
   const colorscale = diff
     ? [[0, "#FF3333"], [0.5, "#121418"], [1, "#00E599"]]
-    : [[0, "#0047FF"], [0.5, "#FFDD00"], [1, "#FF3333"]];
-  const z = lts.map((_, j) => lons.map((_, i) => matrix[i][j]));
+    : [[0, "#0047FF"], [0.35, "#336DFF"], [0.55, "#FFDD00"], [0.8, "#FF3333"], [1, "#FF3333"]];
+  // Build customdata with classification per cell
+  const customdata = z.map((row) => row.map((v) => classify(v)));
+
   return (
-    <div className="bg-[#090A0C] border border-[#2A2D35]" data-testid="plot-heatmap">
-      <div className="px-4 py-2 border-b border-[#2A2D35] mono text-[10px] uppercase tracking-[0.25em] text-[#8B93A5]">
-        {title}
+    <div className="bg-[#090A0C] border border-[#2A2D35]" data-testid="plot-surface">
+      <div className="px-4 py-2 border-b border-[#2A2D35] mono text-[10px] uppercase tracking-[0.25em] text-[#8B93A5] flex items-center justify-between">
+        <span>{title}</span>
+        {method && <span className="text-[#565D6D] normal-case tracking-normal">{method}</span>}
       </div>
       <Plot
         data={[{
-          z, x: lons, y: lts,
-          type: "heatmap", colorscale,
-          zmin: diff ? -1 : 0, zmax: 1, zmid: diff ? 0 : undefined,
+          type: "surface",
+          x: lons, y: lts, z,
+          customdata,
+          colorscale,
+          cmin: diff ? -1 : 0, cmax: 1, cmid: diff ? 0 : undefined,
+          showscale: true,
+          contours: {
+            z: { show: true, usecolormap: true, highlightcolor: "#FFDD00",
+                 project: { z: true }, width: 2 },
+          },
+          hovertemplate:
+            "<b>Lon</b> %{x:.1f}°<br>" +
+            "<b>LT</b> %{y:.2f} h<br>" +
+            "<b>IBP</b> %{z:.3f}<br>" +
+            "%{customdata}<extra></extra>",
           colorbar: {
-            thickness: 8, outlinewidth: 0,
+            thickness: 8, outlinewidth: 0, len: 0.8,
             tickfont: { family: "JetBrains Mono, monospace", size: 10, color: "#8B93A5" },
             title: { text: diff ? "Δ IBP" : "IBP", font: { color: "#8B93A5", family: "JetBrains Mono", size: 10 } },
           },
         }]}
         layout={{
           paper_bgcolor: "#090A0C", plot_bgcolor: "#090A0C",
-          margin: { l: 56, r: 30, t: 10, b: 46 },
+          margin: { l: 0, r: 0, t: 0, b: 0 },
           height,
+          scene: {
+            xaxis: { ...AXIS3D, title: "Longitude (°)" },
+            yaxis: { ...AXIS3D, title: "Local Time (h)" },
+            zaxis: { ...AXIS3D, title: "IBP", range: diff ? [-1, 1] : [0, 1] },
+            camera: { eye: { x: 1.6, y: -1.8, z: 1.1 } },
+            aspectratio: { x: 1.4, y: 1, z: 0.6 },
+            bgcolor: "#090A0C",
+          },
+        }}
+        config={{ displaylogo: false, responsive: true,
+          modeBarButtonsToRemove: ["lasso2d", "select2d", "orbitRotation"] }}
+        style={{ width: "100%", height }}
+        useResizeHandler
+      />
+    </div>
+  );
+}
+
+/** 2-D heatmap kept for compact views (dashboard, public share). */
+export function Heatmap({ lons, lts, matrix, title, diff = false, height = 420 }) {
+  const z = lts.map((_, j) => lons.map((_, i) => matrix[i][j]));
+  const colorscale = diff
+    ? [[0, "#FF3333"], [0.5, "#121418"], [1, "#00E599"]]
+    : [[0, "#0047FF"], [0.5, "#FFDD00"], [1, "#FF3333"]];
+  return (
+    <div className="bg-[#090A0C] border border-[#2A2D35]" data-testid="plot-heatmap">
+      <div className="px-4 py-2 border-b border-[#2A2D35] mono text-[10px] uppercase tracking-[0.25em] text-[#8B93A5]">{title}</div>
+      <Plot
+        data={[{
+          z, x: lons, y: lts, type: "heatmap", colorscale,
+          zmin: diff ? -1 : 0, zmax: 1, zmid: diff ? 0 : undefined,
+          hovertemplate: "Lon %{x}°<br>LT %{y}h<br>IBP %{z:.3f}<extra></extra>",
+          colorbar: { thickness: 8, outlinewidth: 0,
+            tickfont: { family: "JetBrains Mono, monospace", size: 10, color: "#8B93A5" } },
+        }]}
+        layout={{
+          paper_bgcolor: "#090A0C", plot_bgcolor: "#090A0C",
+          margin: { l: 56, r: 30, t: 10, b: 46 }, height,
           xaxis: { ...AXIS, title: "Longitude (°)" },
           yaxis: { ...AXIS, title: "Local Time (h)" },
         }}
         config={{ displaylogo: false, responsive: true,
-          modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"] }}
+          modeBarButtonsToRemove: ["lasso2d", "select2d"] }}
         style={{ width: "100%", height }}
         useResizeHandler
       />
@@ -56,10 +127,11 @@ export function HotspotBars({ hotspots }) {
         x: hotspots.map((h) => h.IBP),
         y: hotspots.map((h) => `Lon ${h.Lon}° / LT ${h.LT}h`),
         marker: { color: "#0047FF" },
+        hovertemplate: "%{y}<br>IBP %{x:.3f}<extra></extra>",
       }]}
       layout={{
         paper_bgcolor: "#090A0C", plot_bgcolor: "#090A0C",
-        margin: { l: 120, r: 20, t: 10, b: 30 }, height: 220,
+        margin: { l: 130, r: 20, t: 10, b: 30 }, height: 220,
         xaxis: { ...AXIS, range: [0, 1] }, yaxis: { ...AXIS, automargin: true },
       }}
       config={{ displaylogo: false, responsive: true, displayModeBar: false }}
@@ -68,4 +140,4 @@ export function HotspotBars({ hotspots }) {
   );
 }
 
-export default Heatmap;
+export default Surface3D;

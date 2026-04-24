@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import createPlotlyComponent from "react-plotly.js/factory";
-import Plotly from "plotly.js-geo-dist-min";
+import Plotly from "plotly.js-dist-min";
 import { Planet, ArrowRight } from "@phosphor-icons/react";
 
 const Plot = createPlotlyComponent(Plotly);
