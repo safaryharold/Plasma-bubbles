@@ -180,14 +180,16 @@ def smooth_surface(lons: list[float], lts: list[float], matrix: list[list[float]
 
 
 def worldmap_grid(day_month: int, f107: float, lon_step: float = 10.0,
-                  lat_half_range: float = 25.0, lat_step: float = 2.0) -> dict:
+                  lat_half_range: float = 25.0, lat_step: float = 2.0,
+                  output_lon_step: float = 2.0, output_lat_step: float = 1.0) -> dict:
     """Compute a 2-D lat × lon IBP overlay per local-time frame.
 
     The ibpmodel only returns IBP on the equator; this function uses a physics-
     informed Gaussian envelope centered at the magnetic equator (~11° tilt from
     geographic equator at the African sector, drifting with longitude) to
-    extrapolate IBP to off-equator latitudes. Scikit-learn is then used to
-    smooth the resulting 2-D grid per frame.
+    extrapolate IBP to off-equator latitudes. Scikit-learn GPR is then used to
+    upscale the resulting sparse lat×lon grid to a DENSE output grid so the
+    frontend overlay appears continuous rather than as discrete columns.
     """
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
@@ -197,7 +199,6 @@ def worldmap_grid(day_month: int, f107: float, lon_step: float = 10.0,
     lats = list(np.round(np.arange(-lat_half_range, lat_half_range + 1e-9, lat_step), 2))
     df = calculate(day_month, lons, lt_values, f107)
 
-    # Quick lookup: per LT → {lon: ibp}
     lookup: dict = {}
     for _, row in df.iterrows():
         lookup.setdefault(float(row["LT"]), {})[float(row["Lon"])] = float(row["IBP"])
@@ -205,46 +206,59 @@ def worldmap_grid(day_month: int, f107: float, lon_step: float = 10.0,
     doy = int(df.iloc[0]["Doy"]); month = int(df.iloc[0]["Month"])
 
     def mag_lat_offset(lon_deg: float) -> float:
-        """Approximate IGRF magnetic-dip equator offset from geographic equator."""
-        # African sector ~+11° N, American ~-5°, Pacific ~0° — crude sinusoid
         return 7.0 * np.sin(np.deg2rad(lon_deg + 60.0))
 
     def envelope(lat: float, mag_offset: float) -> float:
-        """Equatorial plasma bubble latitude envelope.
-
-        Peak at magnetic equator; ±15° FWHM (typical bubble extent).
-        """
-        sigma = 9.0  # degrees
+        sigma = 9.0
         return float(np.exp(-0.5 * ((lat - mag_offset) / sigma) ** 2))
+
+    # Dense output grid used for the overlay rendering
+    out_lons = list(np.round(np.arange(-180, 180 + 1e-9, output_lon_step), 2))
+    out_lats = list(np.round(np.arange(-lat_half_range, lat_half_range + 1e-9, output_lat_step), 2))
+    n_out_lat = len(out_lats); n_out_lon = len(out_lons)
+    out_LA, out_LO = np.meshgrid(out_lats, out_lons, indexing="ij")
+    out_X = np.column_stack([out_LA.ravel() / 10.0, out_LO.ravel() / 30.0])
 
     frames = []
     kernel = C(1.0, (1e-3, 1e3)) * RBF(length_scale=1.0, length_scale_bounds=(0.5, 15.0))
 
     for lt in lt_values:
-        eq_values = np.array([lookup[lt].get(ln, 0.0) for ln in lons])  # along equator
-        # Build 2-D matrix [lat × lon] = eq_values[lon] * envelope(lat - mag_offset(lon))
-        grid = np.zeros((len(lats), len(lons)))
+        eq_values = np.array([lookup[lt].get(ln, 0.0) for ln in lons])
+        # Build sparse 2-D training grid
+        sparse = np.zeros((len(lats), len(lons)))
         for j, ln in enumerate(lons):
             off = mag_lat_offset(ln)
             for i, la in enumerate(lats):
-                grid[i, j] = eq_values[j] * envelope(la, off)
-        # Optional: sklearn smoothing to reduce the striation from sparse longitudes
+                sparse[i, j] = eq_values[j] * envelope(la, off)
+        # Upscale to dense output grid via GPR
         try:
-            LA, LO = np.meshgrid(lats, lons, indexing="ij")
-            X = np.column_stack([LA.ravel() / 10.0, LO.ravel() / 30.0])
-            y = grid.ravel()
-            if y.std() > 1e-6:
+            if sparse.std() > 1e-6:
+                LA, LO = np.meshgrid(lats, lons, indexing="ij")
+                X = np.column_stack([LA.ravel() / 10.0, LO.ravel() / 30.0])
+                y = sparse.ravel()
                 gpr = GaussianProcessRegressor(kernel=kernel, alpha=5e-4, normalize_y=True,
                                                n_restarts_optimizer=0)
                 gpr.fit(X, y)
-                grid = np.clip(gpr.predict(X).reshape(grid.shape), 0.0, 1.0)
+                dense = np.clip(gpr.predict(out_X).reshape(n_out_lat, n_out_lon), 0.0, 1.0)
+            else:
+                dense = np.zeros((n_out_lat, n_out_lon))
         except Exception as exc:
-            logger.warning("sklearn 2-D smoothing failed at lt=%s: %s", lt, exc)
-        frames.append({"lt": lt, "matrix": grid.tolist()})
+            logger.warning("sklearn upscale failed at lt=%s: %s", lt, exc)
+            # Fallback: nearest-sparse-cell fill
+            dense = np.zeros((n_out_lat, n_out_lon))
+            for i_out, la in enumerate(out_lats):
+                for j_out, ln in enumerate(out_lons):
+                    i = int(min(len(lats) - 1, (la - lats[0]) / max(lat_step, 1e-6)))
+                    j = int(min(len(lons) - 1, (ln - lons[0]) / max(lon_step, 1e-6)))
+                    dense[i_out, j_out] = sparse[max(0, i), max(0, j)]
+        frames.append({"lt": lt, "matrix": dense.tolist()})
 
     return {
         "day_month": day_month, "f107": f107, "doy": doy, "month": month,
-        "lons": lons, "lats": [float(x) for x in lats], "lt_values": lt_values,
+        "lons": [float(x) for x in out_lons],
+        "lats": [float(x) for x in out_lats],
+        "lt_values": lt_values,
         "frames": frames,
-        "method": "sklearn.GPR + physical-magnetic-equator envelope",
+        "method": "sklearn.GPR upscaled + physical-magnetic-equator envelope",
+        "raw_grid": {"lons": lons, "lats": [float(x) for x in lats]},
     }

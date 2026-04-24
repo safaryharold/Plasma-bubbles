@@ -16,7 +16,7 @@ function classify(ibp) {
 }
 
 export default function WorldMap() {
-  const [params, setParams] = useState({ day_month: 3, f107: 150, lon_step: 10, lat_step: 2 });
+  const [params, setParams] = useState({ day_month: 3, f107: 150, lon_step: 15, lat_step: 3 });
   const [data, setData] = useState(null);
   const [ltIndex, setLtIndex] = useState(42); // LT 21:00
   const [playing, setPlaying] = useState(false);
@@ -61,8 +61,8 @@ export default function WorldMap() {
         );
       }
     }
-    // Scale marker size by resolution so cells overlap and appear continuous
-    const markerSize = 18 - Math.min(8, (data.lons.length + data.lats.length) / 6);
+    // Scale marker size so the dense grid appears continuous
+    const markerSize = 7;
     return [{
       type: "scattergeo",
       lon: lons, lat: lats,
@@ -73,7 +73,7 @@ export default function WorldMap() {
         cmin: 0, cmax: 1,
         size: markerSize,
         symbol: "square",
-        opacity: 0.55,
+        opacity: 0.72,
         line: { width: 0 },
         colorbar: {
           thickness: 10, outlinewidth: 0, len: 0.85,

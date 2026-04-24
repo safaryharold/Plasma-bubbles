@@ -32,6 +32,14 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 - [x] Rate limiter with per-role minute + daily quotas
 - [x] data-testid coverage across all interactive elements
 
+## Implemented — v1.2 (2026-04-24 late evening)
+- [x] **3-D surface plots** (Plotly `type: surface`) replace 2-D heatmaps in /sweep and /compare
+- [x] **Scikit-learn Gaussian-Process smoothing** (`GaussianProcessRegressor` + RBF kernel) upscales sweep grids 2-3× for smooth surfaces
+- [x] **Continuous world-map overlay** — backend upscales sparse grid to 181×51 dense (`sklearn.GPR upscaled`) for a true heatmap appearance instead of columns-of-dots
+- [x] Rich hover information on all plots: Lon / LT / IBP / risk classification (HIGH / Moderate / Low / Negligible)
+- [x] Physics-informed magnetic-equator envelope (σ=9° Gaussian centered on a sinusoidal magnetic-dip approximation) for physically meaningful off-equator values
+- [x] Swapped Plotly bundle to `plotly.js-dist-min` to support surface + geo in a single bundle
+
 ## Implemented — v1.1 (2026-04-24 evening)
 - [x] Removed role/tier selector from `/register` — all logged-in users get full access
 - [x] **World-map page** (/worldmap) with Plotly scattergeo + 48-frame local-time slider (0.5h step) + play/pause animation
