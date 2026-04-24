@@ -98,20 +98,23 @@ export default function Landing() {
 
       {/* Pricing teaser */}
       <section className="max-w-7xl mx-auto px-6 md:px-8 py-20">
-        <div className="mono text-[10px] uppercase tracking-[0.3em] text-[#565D6D] mb-3">— tiers</div>
-        <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight mb-12 max-w-3xl">Free for research. Pro for production.</h2>
+        <div className="mono text-[10px] uppercase tracking-[0.3em] text-[#565D6D] mb-3">— access</div>
+        <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight mb-4 max-w-3xl">Free for the whole research community.</h2>
+        <p className="mono text-xs md:text-sm text-[#8B93A5] max-w-2xl mb-12">
+          Every feature of the platform is open to every logged-in user: unlimited sweeps, experiments, API keys, public share links, multi-format exports. Log in and build.
+        </p>
         <div className="grid md:grid-cols-3 gap-0 border border-[#2A2D35]">
           {[
-            { n: "Researcher", p: "$0", c: ["60 req/min", "500 runs/day", "CSV export", "10k-cell sweeps"], testid: "tier-researcher" },
-            { n: "Pro", p: "$49", c: ["600 req/min", "50k runs/day", "API keys + webhooks", "Priority queue"], featured: true, testid: "tier-pro" },
-            { n: "Enterprise", p: "Custom", c: ["Dedicated compute", "NetCDF, Parquet", "SLA + audit", "Ray cluster migration"], testid: "tier-enterprise" },
+            { n: "Full console", p: "Free", c: ["Single-point + sweep calculator", "Experiments library + A/B diff", "Interactive world-map overlay", "CSV / NetCDF / Parquet exports"], featured: true, testid: "tier-full" },
+            { n: "API access", p: "Free", c: ["Programmatic API keys", "Celery-backed job queue", "Public share links for results", "Reproducibility hashes on every job"], testid: "tier-api" },
+            { n: "Enterprise", p: "Custom", c: ["Dedicated compute clusters", "SLA + audit logs", "On-premise deployment", "Priority model updates"], testid: "tier-enterprise" },
           ].map((t, i) => (
             <div key={i} className={`p-8 border-r last:border-r-0 border-[#2A2D35] ${t.featured ? 'bg-[#121418]' : ''}`} data-testid={t.testid}>
               {t.featured && (
                 <div className="mono text-[10px] uppercase tracking-[0.25em] text-[#0047FF] mb-4">— recommended</div>
               )}
               <div className="font-sans font-black text-xl tracking-tight">{t.n}</div>
-              <div className="font-sans font-black text-4xl tracking-tighter mt-4">{t.p}<span className="text-sm text-[#8B93A5] font-normal mono ml-2">/ mo</span></div>
+              <div className="font-sans font-black text-4xl tracking-tighter mt-4">{t.p}</div>
               <ul className="mt-6 space-y-3">
                 {t.c.map((ci, j) => (
                   <li key={j} className="flex items-center gap-2 mono text-xs text-[#8B93A5]">
@@ -121,9 +124,6 @@ export default function Landing() {
               </ul>
             </div>
           ))}
-        </div>
-        <div className="mt-6 mono text-[10px] uppercase tracking-[0.25em] text-[#565D6D]">
-          Billing design hooks present; Stripe flow not live in this release.
         </div>
       </section>
 

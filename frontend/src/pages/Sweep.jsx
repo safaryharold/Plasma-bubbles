@@ -55,16 +55,17 @@ export default function Sweep() {
     } catch (e) { setErr(formatApiError(e)); }
   };
 
-  const download = () => {
+  const download = (format = "csv") => {
     if (!job || job.status !== "COMPLETED") return;
     const token = localStorage.getItem("ibp_token");
-    const url = `${process.env.REACT_APP_BACKEND_URL}/api/ibp/download/${job.id}`;
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/ibp/download/${job.id}?format=${format}`;
+    const ext = { csv: "csv", netcdf: "nc", parquet: "parquet" }[format];
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.blob())
       .then(blob => {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = `ibp_${job.id.slice(0,8)}.csv`;
+        a.download = `ibp_${job.id.slice(0,8)}.${ext}`;
         a.click();
       });
   };
@@ -178,10 +179,18 @@ export default function Sweep() {
                   <HotspotBars hotspots={viz.summary.hotspots} />
                 </div>
               </div>
-              <div className="p-4 border-t border-[#2A2D35] flex gap-3">
-                <button onClick={download} data-testid="download-csv-btn"
+              <div className="p-4 border-t border-[#2A2D35] flex gap-3 flex-wrap">
+                <button onClick={() => download("csv")} data-testid="download-csv-btn"
                   className="h-10 px-4 bg-white hover:bg-[#0047FF] hover:text-white text-[#090A0C] mono text-xs uppercase tracking-[0.25em] flex items-center gap-2 transition-colors">
                   <DownloadSimple size={14} /> CSV
+                </button>
+                <button onClick={() => download("netcdf")} data-testid="download-nc-btn"
+                  className="h-10 px-4 border border-[#2A2D35] hover:border-[#0047FF] hover:text-[#0047FF] text-white mono text-xs uppercase tracking-[0.25em] flex items-center gap-2 transition-colors">
+                  <DownloadSimple size={14} /> NetCDF
+                </button>
+                <button onClick={() => download("parquet")} data-testid="download-parquet-btn"
+                  className="h-10 px-4 border border-[#2A2D35] hover:border-[#0047FF] hover:text-[#0047FF] text-white mono text-xs uppercase tracking-[0.25em] flex items-center gap-2 transition-colors">
+                  <DownloadSimple size={14} /> Parquet
                 </button>
               </div>
             </div>

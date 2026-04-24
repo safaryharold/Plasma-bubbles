@@ -15,6 +15,7 @@ from app.routes_ibp import router as ibp_router  # noqa: E402
 from app.routes_experiments import router as exp_router  # noqa: E402
 from app.routes_keys import router as keys_router  # noqa: E402
 from app.routes_admin import router as admin_router  # noqa: E402
+from app.routes_share import router as share_router, public_router  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
 logger = logging.getLogger("ibp")
@@ -40,6 +41,8 @@ api.include_router(ibp_router)
 api.include_router(exp_router)
 api.include_router(keys_router)
 api.include_router(admin_router)
+api.include_router(share_router)
+api.include_router(public_router)
 
 app.include_router(api)
 
@@ -64,6 +67,8 @@ async def startup():
     await db.experiments.create_index("user_id")
     await db.api_keys.create_index("id", unique=True)
     await db.api_keys.create_index("key_hash", unique=True)
+    await db.shares.create_index("token", unique=True)
+    await db.shares.create_index("user_id")
     await seed_admin()
     logger.info("IBP platform ready.")
 

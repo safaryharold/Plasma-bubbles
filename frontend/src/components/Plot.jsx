@@ -1,6 +1,6 @@
 import React from "react";
 import createPlotlyComponent from "react-plotly.js/factory";
-import Plotly from "plotly.js-cartesian-dist-min";
+import Plotly from "plotly.js-geo-dist-min";
 const Plot = createPlotlyComponent(Plotly);
 
 const AXIS = {

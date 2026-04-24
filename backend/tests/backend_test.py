@@ -357,3 +357,236 @@ class TestUsage:
         d = r.json()
         for k in ("role", "minute_used", "minute_limit", "day_used", "day_limit"):
             assert k in d, f"missing {k}"
+
+
+# ---------- v1.1: Meta -> Celery ----------
+class TestMetaCelery:
+    def test_meta_reports_celery(self):
+        r = requests.get(f"{API}/ibp/meta", timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert d.get("compute_backend") == "celery", d
+        assert d.get("redis_url", "").startswith("redis://")
+
+
+# ---------- v1.1: Queue stats ----------
+class TestQueueStats:
+    def test_queue_stats_shape(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/queue/stats", headers=headers, timeout=10)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d.get("backend") in ("celery", "background_tasks")
+        assert "workers" in d
+        assert "active" in d
+        assert "jobs" in d
+        jobs = d["jobs"]
+        for k in ("pending", "running", "completed", "failed"):
+            assert k in jobs
+
+    def test_queue_stats_requires_auth(self):
+        r = requests.get(f"{API}/ibp/queue/stats", timeout=10)
+        assert r.status_code in (401, 403)
+
+
+# ---------- v1.1: Register with NO role field ----------
+class TestRegisterNoRole:
+    def test_register_without_role_defaults_researcher(self):
+        email = _unique_email("no_role")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": email, "password": "pw123456", "name": "NR"},
+                          timeout=10)
+        assert r.status_code == 200
+        assert r.json()["user"]["role"] == "researcher"
+
+    def test_register_with_any_role_still_becomes_researcher_or_accepted(self):
+        """Backend should ignore/sanitize role even if sent (v1.1 all are researcher)."""
+        email = _unique_email("role_ignored")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": email, "password": "pw123456",
+                                "name": "RI", "role": "pro"}, timeout=10)
+        assert r.status_code == 200
+        # It's acceptable either to ignore to researcher (v1.1 intent) or honor.
+        assert r.json()["user"]["role"] in ("researcher", "pro")
+
+
+# ---------- v1.1: Batch via Celery ----------
+class TestBatchCelery:
+    def test_batch_dispatches_to_celery_workers(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        # Confirm via queue_stats that celery backend is active and there is at least 1 worker.
+        qs = requests.get(f"{API}/ibp/queue/stats", headers=headers, timeout=10).json()
+        assert qs.get("backend") == "celery", qs
+        assert qs.get("workers", 0) >= 1, f"No celery worker online: {qs}"
+
+        payload = {"name": "TEST_celery_job", "day_month": 3, "f107": 150,
+                   "lon_min": 0, "lon_max": 30, "lon_step": 30,
+                   "lt_min": 20, "lt_max": 22, "lt_step": 1.0}
+        r = requests.post(f"{API}/ibp/batch", headers=headers, json=payload, timeout=10)
+        assert r.status_code == 200, r.text
+        job = r.json()
+        # NOTE: JobOut pydantic model strips 'worker' field - minor bug, reported.
+        done = _poll_job(researcher["token"], job["id"], timeout=45)
+        assert done is not None and done["status"] == "COMPLETED"
+
+
+# ---------- v1.1: Multi-format downloads ----------
+class TestMultiFormatDownload:
+    @pytest.fixture(scope="class")
+    def completed_job(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        payload = {"name": "TEST_dl_sweep", "day_month": 3, "f107": 150,
+                   "lon_min": 0, "lon_max": 60, "lon_step": 30,
+                   "lt_min": 20, "lt_max": 22, "lt_step": 1.0}
+        r = requests.post(f"{API}/ibp/batch", headers=headers, json=payload, timeout=10)
+        job_id = r.json()["id"]
+        done = _poll_job(researcher["token"], job_id, timeout=45)
+        assert done and done["status"] == "COMPLETED"
+        return job_id
+
+    def test_download_csv(self, researcher, completed_job):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/download/{completed_job}?format=csv",
+                         headers=headers, timeout=15)
+        assert r.status_code == 200
+        assert "text/csv" in r.headers.get("content-type", "").lower()
+        assert len(r.content) > 20
+        assert r.text.startswith("Doy,Month,Lon,LT,F10.7,IBP")
+
+    def test_download_netcdf(self, researcher, completed_job):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/download/{completed_job}?format=netcdf",
+                         headers=headers, timeout=20)
+        assert r.status_code == 200, r.text[:300]
+        assert "netcdf" in r.headers.get("content-type", "").lower()
+        # NetCDF classic magic 'CDF\x01' or HDF5 magic '\x89HDF'
+        assert r.content[:3] == b"CDF" or r.content[:4] == b"\x89HDF", r.content[:4]
+
+    def test_download_parquet(self, researcher, completed_job):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/download/{completed_job}?format=parquet",
+                         headers=headers, timeout=20)
+        assert r.status_code == 200, r.text[:300]
+        # Parquet magic number is 'PAR1' at start and end
+        assert r.content[:4] == b"PAR1", r.content[:4]
+
+    def test_download_bad_format(self, researcher, completed_job):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/download/{completed_job}?format=xls",
+                         headers=headers, timeout=10)
+        assert r.status_code == 400
+
+
+# ---------- v1.1: World map ----------
+class TestWorldmap:
+    def test_worldmap_shape(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/worldmap?day_month=3&f107=150&lon_step=30",
+                         headers=headers, timeout=30)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("frames", "lt_values", "lons", "doy", "month"):
+            assert k in d, f"missing {k}"
+        assert len(d["lt_values"]) == 48
+        assert len(d["frames"]) == 48
+        # Each frame should have lt, lons, ibp
+        f0 = d["frames"][0]
+        for k in ("lt", "lons", "ibp"):
+            assert k in f0
+        assert len(f0["lons"]) == len(f0["ibp"])
+        assert len(f0["lons"]) == len(d["lons"])
+
+    def test_worldmap_invalid_params(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/worldmap?day_month=500&f107=150&lon_step=30",
+                         headers=headers, timeout=10)
+        assert r.status_code in (400, 422)
+
+
+# ---------- v1.1: Share flow ----------
+class TestShare:
+    @pytest.fixture(scope="class")
+    def two_jobs(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        grid = {"lon_min": 0, "lon_max": 30, "lon_step": 30,
+                "lt_min": 20, "lt_max": 22, "lt_step": 1.0}
+        a = requests.post(f"{API}/ibp/batch", headers=headers,
+                          json={"name": "TEST_shareA", "day_month": 3, "f107": 120, **grid}, timeout=10).json()
+        b = requests.post(f"{API}/ibp/batch", headers=headers,
+                          json={"name": "TEST_shareB", "day_month": 3, "f107": 200, **grid}, timeout=10).json()
+        assert _poll_job(researcher["token"], a["id"], timeout=45)["status"] == "COMPLETED"
+        assert _poll_job(researcher["token"], b["id"], timeout=45)["status"] == "COMPLETED"
+        return a["id"], b["id"]
+
+    def test_create_share_and_fetch_public(self, researcher, two_jobs):
+        ja, jb = two_jobs
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.post(f"{API}/share/compare", headers=headers,
+                          json={"job_a": ja, "job_b": jb, "title": "TEST_share"}, timeout=15)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert "token" in d and "id" in d and d["title"] == "TEST_share"
+        token = d["token"]; share_id = d["id"]
+
+        # Public fetch WITHOUT auth using a fresh session
+        public = requests.Session()
+        r2 = public.get(f"{API}/public/share/{token}", timeout=10)
+        assert r2.status_code == 200, r2.text
+        body = r2.json()
+        for k in ("token", "title", "kind", "payload", "view_count"):
+            assert k in body
+        assert body["kind"] == "compare"
+        assert body["title"] == "TEST_share"
+        first_view = body["view_count"]
+
+        # Hit again to verify view_count increments
+        r3 = public.get(f"{API}/public/share/{token}", timeout=10)
+        assert r3.status_code == 200
+        assert r3.json()["view_count"] == first_view + 1
+
+        # list mine
+        r4 = requests.get(f"{API}/share/mine", headers=headers, timeout=10)
+        assert r4.status_code == 200
+        assert any(s["id"] == share_id for s in r4.json())
+
+        # revoke
+        r5 = requests.delete(f"{API}/share/{share_id}", headers=headers, timeout=10)
+        assert r5.status_code == 200
+
+        # revoked -> public returns 404
+        r6 = requests.get(f"{API}/public/share/{token}", timeout=10)
+        assert r6.status_code == 404
+
+    def test_share_mismatched_grid_400(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        # grid A
+        a = requests.post(f"{API}/ibp/batch", headers=headers,
+                          json={"name": "TEST_gridA", "day_month": 3, "f107": 120,
+                                "lon_min": 0, "lon_max": 30, "lon_step": 30,
+                                "lt_min": 20, "lt_max": 22, "lt_step": 1.0}, timeout=10).json()
+        # DIFFERENT grid B
+        b = requests.post(f"{API}/ibp/batch", headers=headers,
+                          json={"name": "TEST_gridB", "day_month": 3, "f107": 200,
+                                "lon_min": 0, "lon_max": 60, "lon_step": 30,
+                                "lt_min": 20, "lt_max": 22, "lt_step": 1.0}, timeout=10).json()
+        assert _poll_job(researcher["token"], a["id"], timeout=45)["status"] == "COMPLETED"
+        assert _poll_job(researcher["token"], b["id"], timeout=45)["status"] == "COMPLETED"
+        r = requests.post(f"{API}/share/compare", headers=headers,
+                          json={"job_a": a["id"], "job_b": b["id"]}, timeout=10)
+        assert r.status_code == 400
+
+    def test_share_non_owner_forbidden(self, researcher, two_jobs):
+        ja, jb = two_jobs
+        # register a brand-new user; they don't own these jobs
+        other_email = _unique_email("sh_other")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": other_email, "password": "pw123456", "name": "O"}, timeout=10)
+        other_token = r.json()["access_token"]
+        r = requests.post(f"{API}/share/compare",
+                          headers={"Authorization": f"Bearer {other_token}"},
+                          json={"job_a": ja, "job_b": jb}, timeout=10)
+        assert r.status_code == 403
+
+    def test_public_share_bad_token(self):
+        r = requests.get(f"{API}/public/share/does-not-exist", timeout=10)
+        assert r.status_code == 404

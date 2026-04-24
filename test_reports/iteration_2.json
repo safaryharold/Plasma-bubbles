@@ -1,0 +1,46 @@
+{
+  "summary": "v1.1 upgrade fully validated end-to-end. 41/41 backend pytest cases passing against the live preview URL (16 NEW tests covering meta->celery, queue stats, register-no-role, celery dispatch, CSV/NetCDF/Parquet downloads, /ibp/worldmap frames, and the complete share flow incl. public/no-auth retrieval, view_count increment, mismatched-grid 400, non-owner 403, and revoke). Frontend playwright suite validated: /register has no role selector, /worldmap renders Plotly + slider animates LT, /sweep shows all three download buttons after a completed job, /compare creates share links and the public /s/:token page renders without auth (three heatmaps, title, owner, view_count, CTA).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ibp/batch", "issue": "JobOut pydantic model does not expose the 'worker' field that is written to MongoDB. The field is persisted and dispatch correctly goes to celery (verified via /ibp/queue/stats showing backend=celery + workers>=1), but API clients cannot see 'worker' on the returned job. Fix: add `worker: Optional[str] = None` (and optionally `task_id`) to JobOut in models.py."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Compare page - Create Share button", "issue": "At viewport widths where the page bottom is short, the floating 'Made with Emergent' badge (bottom-right) overlaps the 'Create share link' button. Real users can scroll or resize to click, but this is a minor UX overlap. JS-dispatched clicks succeed; pointer-event clicks from the same coordinates can be intercepted.", "selector": "[data-testid=\"create-share-btn\"]", "priority": "LOW"},
+      {"component": "Compare page - <option> children", "issue": "Pre-existing (iteration_1) React hydration warning '<span> cannot be a child of <option>' still present on /compare. Dropdown works but console is noisy.", "selector": "[data-testid=\"compare-a\"] option", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Minor) Add `worker: Optional[str] = None` and `task_id: Optional[str] = None` to JobOut in /app/backend/app/models.py so /api/ibp/batch and /api/ibp/job/{id} expose the worker backend used (celery vs background_tasks). Useful for UI debugging and matches the upgrade spec mention of 'inspect worker field'.",
+    "(Low) On /compare, render <option> labels as plain string template literals (e.g., `${id} · ${name} · ${cells}`) instead of JSX expressions to silence the React hydration span-in-option warning that the dev overlay injects.",
+    "(Optional UX) The floating 'Made with Emergent' badge sits on top of the 'Create share link' CTA at the bottom-right of /compare when the page is short. Consider adding extra bottom padding to the page or moving the share-panel above the fold to avoid overlap."
+  ],
+  "critical_code_review_comments": [
+    "celery_app.py correctly gates on redis.ping() with a 0.5s timeout and transparently falls back to FastAPI BackgroundTasks when Redis is unreachable. Well-designed.",
+    "routes_share.py correctly projects out {_id:0, user_id:0} on the public endpoint and uses $inc on view_count atomically. Token length is 22 chars url-safe (~128 bits entropy) - adequate.",
+    "routes_share.py: the ownership check correctly allows admin to share any jobs and restricts non-owners to own jobs only (403). Grid mismatch returns 400 as expected. COMPLETED gate returns 409.",
+    "routes_ibp.py download endpoint supports csv/netcdf/parquet via xarray and pyarrow. NetCDF file is written to /tmp and removed after read - no temp-file leak risk.",
+    "worldmap endpoint enforces 1 <= lon_step <= 60 and computes a fixed 48-frame LT grid (0.0..23.5 step 0.5). Good deterministic output shape for the UI slider.",
+    "ibpmodel v2.0.2 is still the real backend (not surrogate). compute_backend='celery' and redis_url populated as required.",
+    "Files remain modular - all routes_*.py are well under 700 lines.",
+    "All three frontend new pages (WorldMap, PublicShare) correctly use REACT_APP_BACKEND_URL via the shared api client and expose data-testid attributes for all interactive elements."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (41/41)", "frontend": "100% of v1.1 critical flows"},
+  "test_credentials": "Admin admin@ibp.dev / admin123 (seeded & verified). Test users auto-registered via /api/auth/register using TEST_-prefixed random emails. No role field required anymore.",
+  "seed_data_creation": "Backend tests create ephemeral users (test_*@ibp.dev) and TEST_-prefixed sweeps, experiments, keys, and shares. Frontend tests additionally created 2 small sweeps via UI under the new test user and 1 public share under admin (TEST_admin_share).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend base URL from frontend/.env: https://ibp-analytics.preview.emergentagent.com/api. Run: pytest /app/backend/tests/backend_test.py -v. All 41 tests pass. Celery worker + Redis are supervised. Worker field is persisted in Mongo but stripped by JobOut response schema - verify via /ibp/queue/stats instead. For the Compare share-link UI test, use JS dispatched click (page.evaluate('() => document.querySelector(...).click()')) to avoid the 'Made with Emergent' badge overlay intercepting pointer events at the bottom-right of the page.",
+  "rca of the issue": "No production-impacting bugs. Only finding: (1) JobOut model does not whitelist 'worker'/'task_id' fields so they do not appear in API responses, though they are saved in Mongo - simple schema fix. (2) Floating Emergent badge can overlap bottom-right buttons on short pages - cosmetic in the preview environment only."
+}

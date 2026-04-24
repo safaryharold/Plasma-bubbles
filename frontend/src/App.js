@@ -14,6 +14,8 @@ import Experiments from "./pages/Experiments";
 import Compare from "./pages/Compare";
 import ApiKeys from "./pages/ApiKeys";
 import Admin from "./pages/Admin";
+import WorldMap from "./pages/WorldMap";
+import PublicShare from "./pages/PublicShare";
 import { Toaster } from "sonner";
 
 function LandingOrRedirect() {
@@ -39,8 +41,10 @@ function App() {
             <Route path="/sweep" element={<ProtectedRoute><Layout><Sweep /></Layout></ProtectedRoute>} />
             <Route path="/experiments" element={<ProtectedRoute><Layout><Experiments /></Layout></ProtectedRoute>} />
             <Route path="/compare" element={<ProtectedRoute><Layout><Compare /></Layout></ProtectedRoute>} />
+            <Route path="/worldmap" element={<ProtectedRoute><Layout><WorldMap /></Layout></ProtectedRoute>} />
             <Route path="/keys" element={<ProtectedRoute><Layout><ApiKeys /></Layout></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireRole={["admin"]}><Layout><Admin /></Layout></ProtectedRoute>} />
+            <Route path="/s/:token" element={<PublicShare />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
