@@ -32,6 +32,11 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 - [x] Rate limiter with per-role minute + daily quotas
 - [x] data-testid coverage across all interactive elements
 
+## Implemented — v1.3 (2026-04-24 night)
+- [x] **Contour heatmap** — reverted from 3-D surface to publication-ready 2-D `contour` plot with **Viridis** colorscale, HH:MM time axis, and title "IBP index at DOY X with F10.7 = Y" — matches the upstream `ibpmodel.plotIBPindex()` reference exactly.
+- [x] Sklearn-smoothed grid still drives the bands so they remain silky-smooth.
+- [x] Rich hover preserved (Lon/LT/IBP/risk classification).
+
 ## Implemented — v1.2 (2026-04-24 late evening)
 - [x] **3-D surface plots** (Plotly `type: surface`) replace 2-D heatmaps in /sweep and /compare
 - [x] **Scikit-learn Gaussian-Process smoothing** (`GaussianProcessRegressor` + RBF kernel) upscales sweep grids 2-3× for smooth surfaces

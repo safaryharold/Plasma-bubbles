@@ -165,9 +165,9 @@ export default function Sweep() {
                 lons={viz.smooth?.lons || viz.lons}
                 lts={viz.smooth?.lts || viz.lts}
                 matrix={viz.smooth?.matrix || viz.matrix}
-                title={`IBP 3-D surface • ${viz.lons.length}×${viz.lts.length} cells · hash ${job.config_hash}`}
-                method={viz.smooth?.method ? `smoothed via ${viz.smooth.method}` : undefined}
-                height={420}
+                doy={viz.doy}
+                f107={viz.params?.f107}
+                height={480}
               />
               <div className="grid grid-cols-2 gap-0 border-t border-[#2A2D35]">
                 <div className="p-4 border-r border-[#2A2D35]">

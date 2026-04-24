@@ -84,9 +84,14 @@ export default function Compare() {
 
       {result && (
         <div className="grid lg:grid-cols-3 gap-4" data-testid="compare-result">
-          <Surface3D lons={result.lons} lts={result.lts} matrix={result.job_a.matrix} title={`A • ${result.job_a.id.slice(0,8)}`} height={340} />
-          <Surface3D lons={result.lons} lts={result.lts} matrix={result.job_b.matrix} title={`B • ${result.job_b.id.slice(0,8)}`} height={340} />
-          <Surface3D lons={result.lons} lts={result.lts} matrix={result.diff} title="A − B (diff)" diff height={340} />
+          <Surface3D lons={result.lons} lts={result.lts} matrix={result.job_a.matrix}
+            title={`A • DOY/month ${result.job_a.params.day_month} · F10.7 = ${result.job_a.params.f107}`}
+            height={380} />
+          <Surface3D lons={result.lons} lts={result.lts} matrix={result.job_b.matrix}
+            title={`B • DOY/month ${result.job_b.params.day_month} · F10.7 = ${result.job_b.params.f107}`}
+            height={380} />
+          <Surface3D lons={result.lons} lts={result.lts} matrix={result.diff}
+            title="A − B (diff)" diff height={380} />
           <div className="lg:col-span-3 border border-[#2A2D35] p-4 grid grid-cols-2 md:grid-cols-4 gap-4 mono text-xs">
             <div><span className="text-[#565D6D] uppercase tracking-widest text-[10px]">Max |Δ|:</span> <span className="text-[#FF3333]" data-testid="compare-max-diff">{result.stats.max_abs_diff.toFixed(4)}</span></div>
             <div><span className="text-[#565D6D] uppercase tracking-widest text-[10px]">Mean |Δ|:</span> <span>{result.stats.mean_abs_diff.toFixed(4)}</span></div>
