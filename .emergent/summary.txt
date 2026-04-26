@@ -1,0 +1,166 @@
+<analysis>### original_problem_statement
+**Product Requirements:**
+Design and implement a scalable, production-ready, and scientifically rigorous full‑stack platform for the Ionospheric Bubble Probability (IBP) model. Target audience includes space weather researchers, GNSS engineers, and telecom engineers. 
+**Core features:** Calculate IBP index using F10.7, Day/Month, Longitude, and Local Time. Support reproducible research, high-performance sweeps/batch computations, 2D/3D visualizations, and NetCDF/Parquet exports.
+**Architecture:** FastAPI backend, MongoDB database, Celery+Redis for background compute tasks, and React (Next.js/CRA) frontend. Dark Command Center/Swiss Brutalist theme.
+
+### User's preferred language
+**English** 
+*(INSTRUCTION: Next agent must respond in English only)*
+
+### what currently exists?
+A fully functional MVP of the IBP Analytics Platform is deployed. The system handles authentication (JWT), execution of IBP calculations (using a vectorized Numpy surrogate and Scikit-learn Gaussian Process Regressor for smoothing), background task queueing with Celery and Redis, and data storage in MongoDB. The frontend provides a dark-themed UI with pages for individual calculation, parameter sweeps, and scenario comparison. Data visualization is powered by Plotly.js, currently utilizing a 2D contour heatmap with a Viridis colorscale. Scenario sharing (public links) and NetCDF/Parquet exports are implemented.
+
+### Last working item
+- **Last item agent was working:** The agent was analyzing a screen recording uploaded by the user to understand the specific visual and functional requirements for a new World Map animation. It successfully ran the  to extract the UX/UI details (animated equirectangular map, discrete probability bands, moving day/night terminator, sun icon, 24-hour time slider).
+- **Status:** IN PROGRESS
+- **Agent Testing Done:** N
+- **Which testing method agent to use?** Frontend testing agent (testing_agent_v3) + Screenshot tool (to visually verify the complex Plotly map animations and styling).
+- **User Testing Done:** N
+
+### All Pending/In progress Issue list
+**Issue 1: World Map UI / Animation Overhaul** (P0)
+- **Attempted fixes:** Analyzed the video in the last step. No code implemented yet.
+- **Next debug checklist:** Modify  to render an equirectangular projection map with a fixed background image/texture, overlay discrete IBP probability bands (white/grey to purple), add a moving day/night terminator line with a sun icon, and implement a draggable 24-hour time slider.
+- **Why fix this issue and what will be achieved with the fix?** Fulfills the user's explicit request to match a specific reference visualization from the uploaded video. 
+- **Status:** NOT STARTED (Analysis complete, implementation pending)
+- **Is recurring issue?** N
+- **Should Test frontend/backend/both after fix?** Frontend (Screenshot tool crucial here)
+- **Blocked on other issue:** None
+
+### In progress Task List
+**Task 1: Add Plot Export and Publication Features** (P1)
+- **Where to resume:**  and .
+- **What will be achieved with this?** Allows researchers to add finer contour levels and export charts as high-res PNG/SVG images, which is critical for publishing papers and sharing results. 
+- **Status:** NOT STARTED
+- **Should Test frontend/backend/both after fix?** Frontend
+- **Blocked on something:** None
+
+**Task 2: Implement Export for Paper Button** (P1)
+- **Where to resume:** Add a specialized button component next to the CSV download in the frontend.
+- **What will be achieved with this?** Renders the heatmap at 300 DPI, uses a publisher-safe color palette, and auto-generates a caption containing the config hash and IBP model reference.
+- **Status:** NOT STARTED
+- **Should Test frontend/backend/both after fix?** Frontend
+- **Blocked on something:** None
+
+**Task 3: Butterfly Diagram** (P2)
+- **Where to resume:** Create a new page or tab for Butterfly Diagram. Backend needs an endpoint to sweep Seasonal Climatology (Months) vs Longitude at a fixed Local Time (21:00).
+- **What will be achieved with this?** Provides a multi-panel climatological view that is standard in space weather research.
+- **Status:** NOT STARTED
+- **Should Test frontend/backend/both after fix?** Both
+- **Blocked on something:** None
+
+### Upcoming and Future Tasks
+- **Future Tasks:** 
+  - Migrate to Ray distributed cluster for even larger global grid sweeps (Currently using Celery which supports 100k+ cells).
+  - Stripe Integration hooks (Currently skipped as the platform is kept open and free for researchers for now).
+
+### Completed work in this session
+- Initial project scaffolding and environment configuration (DONE)
+- JWT Authentication and role-based guardrails (DONE)
+- Numpy vectorized IBP calculation with Scikit-learn GPR smoothing (DONE)
+- Celery + Redis integration for background computation and queuing (DONE)
+- Frontend implementation with Dark Command Center theme (DONE)
+- 2D Contour Heatmap implementation with Viridis colormap matching reference design (DONE)
+- NetCDF / Parquet export formats (DONE)
+- Public share-link functionality for scenario comparisons (DONE)
+
+### Earlier issues found/mentioned but not fixed
+None.
+
+### Known issue recurrence from previous fork
+- Recurrence count: 0
+- Status: N/A
+
+### Code Architecture
+
+
+### Key Technical Concepts
+- **Frontend:** React 19, Tailwind CSS, Plotly.js (react-plotly.js)
+- **Backend:** FastAPI, Python 3.11
+- **Database:** MongoDB (Motor async driver)
+- **Task Queue:** Celery with Redis broker
+- **Scientific Stack:** Numpy, Pandas, Scikit-learn (GaussianProcessRegressor), NetCDF4, PyArrow (Parquet)
+
+### Key DB schema
+- : 
+- : 
+- : 
+
+### Changes in tech stack
+- **Celery + Redis** were installed and configured over the initial FastAPI  approach to support heavy scientific sweeping and queue telemetry.
+- **Plotly.js:** Migrated from basic  to the full suite to support 3D surfaces and geo density maps.
+- **Scikit-learn** added to backend for Gaussian Process Regressor smoothing of matrix arrays.
+
+### All files of reference
+1. : Needs massive updates to match the user's requested video animation (day/night terminator, sun icon, 24-h slider).
+2. : Current standard for rendering the Plotly 2D contour. Will need to be updated or expanded to support 300 DPI exports and the new Export for paper requirements.
+3. : Contains the core surrogate math and upscaling logic.
+4. : Latest successful E2E test report.
+
+### Areas that need refactoring
+- : The current implementation uses Plotly  with large markers. The new requirement asks for an equirectangular image overlay, distinct probability bands, and animated timeline which might require migrating to standard HTML5 Canvas/MapGL or completely overhauling the Plotly  configuration.
+
+### Key API endpoints
+- : Issue JWT token
+- : Dispatch a celery task for multi-dimensional sweeps
+- : Poll Celery task status
+- : Returns CSV/NetCDF/Parquet payload based on query params
+
+### Critical Info for New Agent
+- **DO NOT USE NPM:** Always use yarn install v1.22.22
+[1/4] Resolving packages...
+[2/4] Fetching packages...
+[3/4] Linking dependencies...
+[4/4] Building fresh packages...
+success Saved lockfile.
+Done in 0.04s. for frontend dependency management.
+- **Frontend App Crashing:** There was a known OOM issue ( added to package.json scripts). If you install heavy Plotly packages, ensure you don't break Webpack compilation. 
+- **World Map Analysis:** The  was already run on the user's video in Message #175. Read the output of that tool call closely (discrete color bands from white -> purple, terminator line with sun, 24hr slider). Do not waste time re-analyzing the video.
+- **Visuals:** The user is highly particular about visualization styles. Ensure Viridis colorscales are maintained and fonts follow the Dark Command Center aesthetic (JetBrains Mono/Chivo).
+- **Restarting Services:** If you touch  or , run backend: stopped
+celery_worker: stopped
+backend: started
+celery_worker: started.
+
+### Documents and test reports created in this job
+- 
+- 
+- 
+- 
+- 
+
+### Last 10 User Messages and any pending HUMAN messages
+1. **User (Msg 73)**: Requested removing role gating (make it open for researchers), adding World Map, migrating to Celery, enabling NetCDF/Parquet, and gating share-links behind a pro tier. *(Status: COMPLETED)*
+2. **User (Msg 132)**: Requested changing 2D heatmap to Scikit-learn smoothed 3D heatmap, rich hover text, and an extrapolated World map. *(Status: COMPLETED)*
+3. **User (Msg 163)**: Uploaded an image and requested reverting the heatmap back to a 2D contour style. *(Status: COMPLETED)*
+4. **User (Msg 174)**: Uploaded a screen recording. Requested finer contour-levels options, PNG/SVG downloads, multi-panel butterfly diagram, Export for paper button (300 DPI, auto-caption), and overhauling the World Map to match the video. *(Status: PENDING / IN PROGRESS)*
+
+### Project Health Check
+- **Broken**: None
+- **Mocked**: Surrogate IBP Model is mocked using a vectorized Numpy approximation because  pip package failed on some keyword arguments. This is intentional and approved by the user.
+
+### 3rd Party Integrations
+- No external 3rd Party integrations requiring Emergent LLM keys or User API keys are currently implemented. 
+
+### Testing status
+- Testing agent used after significant changes: YES ( was executed 3 times and resolved all issues).
+- Troubleshoot agent used after agent stuck in loop: NO
+- Test files created: None manually, E2E tests were handled by .
+- Known regressions: None.
+
+### Credentials to test flow:
+Check  for the latest seeded admin/researcher accounts.
+
+### What agent forgot to execute
+Agent successfully analyzed the video but has not written any code yet to fulfill the multi-part request in Message #174 (Contour options, SVG download, Butterfly diagram, 300 DPI export, World map overhaul).
+
+**Debugging checklist for current issue**
+    Issue: Fulfilling the UI visualization upgrade from the video and exporting capabilities.
+    Frontend files to check: 
+    -  (Add export configuration, layout adjustments, contour level configs)
+    -  (Complete rewrite required for moving terminator and slider)
+    -  (Add the Export for Paper and PNG buttons)
+    Backend files to check:
+    -  (Need to add endpoint for the Butterfly Diagram seasonal climatology sweep)
+    Database to check: None needed for this UI task.</analysis>

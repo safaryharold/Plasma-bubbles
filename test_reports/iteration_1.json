@@ -39,6 +39,6 @@
   "seed_data_creation": "Backend tests create ephemeral users with prefix TEST_ and small sweeps/experiments. Admin dashboard shows 7 users, 10 jobs, 2 api_keys as a result of this run.",
   "retest_needed": false,
   "should_main_agent_self_test": true,
-  "context_for_next_testing_agent": "Backend base URL: https://ibp-analytics.preview.emergentagent.com/api. Run: pytest /app/backend/tests/backend_test.py -v. Admin creds admin@ibp.dev/admin123. For sweep tests keep cells <= ~500 (e.g., lon_step=30, lt_step=1) to stay under 5s. Compare requires identical lon/lt grids; vary only day_month or f107. Batch uses BackgroundTasks - poll /api/ibp/job/{id}.",
+  "context_for_next_testing_agent": "Backend base URL: https://space-weather-hub-1.preview.emergentagent.com/api. Run: pytest /app/backend/tests/backend_test.py -v. Admin creds admin@ibp.dev/admin123. For sweep tests keep cells <= ~500 (e.g., lon_step=30, lt_step=1) to stay under 5s. Compare requires identical lon/lt grids; vary only day_month or f107. Batch uses BackgroundTasks - poll /api/ibp/job/{id}.",
   "rca of the issue": "FlaskConical was imported from @phosphor-icons/react in Layout.jsx and Dashboard.jsx, but Phosphor only exports 'Flask' (FlaskConical is a Lucide icon). This produced a webpack compile error shown as the webpack-dev-server-client-overlay iframe that intercepted ALL pointer events on the entire app, making it look like nothing was clickable. Fix: replaced FlaskConical -> Flask in both files. After hot reload, compile succeeded and all pages became interactive."
 }
