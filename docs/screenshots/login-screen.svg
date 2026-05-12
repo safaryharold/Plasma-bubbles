@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="100%" stop-color="#0d1221"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="720" rx="32" fill="url(#bg)"/>
+  <rect x="48" y="48" width="560" height="624" rx="28" fill="#090b12" opacity="0.9"/>
+  <rect x="648" y="96" width="504" height="528" rx="28" fill="#090b12" opacity="0.95"/>
+  <circle cx="180" cy="450" r="220" fill="#0f172a"/>
+  <circle cx="180" cy="460" r="170" fill="#111827"/>
+  <text x="78" y="115" fill="#e2e8f0" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700">IBP ANALYTICS</text>
+  <text x="78" y="320" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">Forecast the <tspan fill="#2563eb">unseen</tspan></text>
+  <text x="78" y="380" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">turbulence of Earth's upper</text>
+  <text x="78" y="440" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">atmosphere.</text>
+  <text x="78" y="520" fill="#94a3b8" font-family="Inter, Arial, sans-serif" font-size="18">Log in to run parameter sweeps, compare scenarios, and export</text>
+  <text x="78" y="548" fill="#94a3b8" font-family="Inter, Arial, sans-serif" font-size="18">reproducible datasets.</text>
+  <text x="680" y="150" fill="#94a3b8" font-family="Inter, Arial, sans-serif" font-size="14" letter-spacing="0.15em">- SIGN IN</text>
+  <text x="680" y="190" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="40" font-weight="800">Access the console.</text>
+  <text x="680" y="230" fill="#94a3b8" font-family="Inter, Arial, sans-serif" font-size="16">Use the seeded admin account or <tspan fill="#60a5fa">create a researcher account.</tspan></text>
+  <rect x="680" y="280" width="456" height="70" rx="12" fill="#111827" stroke="#334155" stroke-width="1"/>
+  <text x="690" y="323" fill="#94a3b8" font-family="Inter, Arial, sans-serif" font-size="12" letter-spacing="0.2em">EMAIL</text>
+  <text x="690" y="360" fill="#e2e8f0" font-family="Inter, Arial, sans-serif" font-size="18">admin@ibp.dev</text>
+  <rect x="680" y="400" width="456" height="70" rx="12" fill="#111827" stroke="#334155" stroke-width="1"/>
+  <text x="690" y="443" fill="#94a3b8" font-family="Inter, Arial, sans-serif" font-size="12" letter-spacing="0.2em">PASSWORD</text>
+  <text x="690" y="483" fill="#e2e8f0" font-family="Inter, Arial, sans-serif" font-size="18">••••••••</text>
+  <rect x="680" y="520" width="456" height="72" rx="16" fill="#2563eb"/>
+  <text x="740" y="565" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700">SIGN IN →</text>
+  <text x="680" y="640" fill="#64748b" font-family="Inter, Arial, sans-serif" font-size="13">SEEDED ADMIN: ADMIN@IBP.DEV / ADMIN123</text>
+</svg>

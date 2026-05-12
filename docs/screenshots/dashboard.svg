@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <rect width="960" height="540" fill="#0f172a" rx="20"/>
+  <rect x="40" y="40" width="880" height="120" fill="#1e293b" rx="16"/>
+  <rect x="40" y="180" width="240" height="280" fill="#1e293b" rx="16"/>
+  <rect x="320" y="180" width="280" height="130" fill="#1e293b" rx="16"/>
+  <rect x="320" y="330" width="280" height="130" fill="#1e293b" rx="16"/>
+  <rect x="640" y="180" width="280" height="280" fill="#1e293b" rx="16"/>
+  <text x="60" y="95" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="28">Dashboard overview</text>
+  <text x="60" y="250" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20">Account</text>
+  <text x="340" y="220" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20">IBP Summary</text>
+  <text x="340" y="370" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20">Job queue</text>
+  <text x="660" y="220" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20">Visual results</text>
+</svg>
