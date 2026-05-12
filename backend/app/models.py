@@ -6,7 +6,7 @@ from datetime import datetime
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=128)
+    password: str = Field(min_length=8, max_length=128, pattern=r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]", description="Password must be at least 8 characters with uppercase, lowercase, number, and special character")
     name: str = Field(min_length=1, max_length=80)
     role: Optional[str] = Field(default="researcher", pattern="^(researcher|pro)$")
 

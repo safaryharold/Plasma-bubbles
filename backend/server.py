@@ -5,6 +5,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import os  # noqa: E402
 import logging  # noqa: E402
+from datetime import datetime, timezone
 from fastapi import FastAPI, APIRouter  # noqa: E402
 from starlette.middleware.cors import CORSMiddleware  # noqa: E402
 
@@ -33,7 +34,27 @@ async def root():
 
 @api.get("/health")
 async def health():
-    return {"status": "ok"}
+    # Check database connection
+    try:
+        db = get_db()
+        await db.command("ping")
+        db_status = "ok"
+    except Exception:
+        db_status = "error"
+
+    # Check Redis if available
+    try:
+        from app.celery_app import CELERY_READY
+        redis_status = "ok" if CELERY_READY else "not configured"
+    except Exception:
+        redis_status = "error"
+
+    return {
+        "status": "ok" if db_status == "ok" else "degraded",
+        "database": db_status,
+        "redis": redis_status,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 
 api.include_router(auth_router)

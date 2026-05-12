@@ -22,11 +22,16 @@ It combines a FastAPI backend with a React frontend and supports interactive cal
 
 ## Tech stack
 
-- Python, FastAPI, Motor, Celery, Redis
-- React, Create React App, CRACO, Tailwind CSS
-- Plotly, Recharts, Radix UI, React Router
+- **Backend**: Python, FastAPI, Motor (async MongoDB), Celery, Redis
+- **Frontend**: React, Create React App, CRACO, Tailwind CSS, Radix UI
+- **Visualization**: Plotly, Recharts
+- **Infrastructure**: Docker, Docker Compose, GitHub Actions
+- **Testing**: pytest, Jest, flake8
+- **Security**: JWT, bcrypt, rate limiting
 
 ## Environment setup
+
+### Option 1: Local development
 
 1. Clone the repository:
    ```bash
@@ -48,6 +53,7 @@ It combines a FastAPI backend with a React frontend and supports interactive cal
    DB_NAME=plasma_bubbles
    REDIS_URL=redis://localhost:6379/0
    CORS_ORIGINS=http://localhost:3000
+   SECRET_KEY=your-secret-key-here
    ```
 
 4. Start the backend API:
@@ -68,6 +74,20 @@ It combines a FastAPI backend with a React frontend and supports interactive cal
    http://localhost:3000
    ```
 
+### Option 2: Docker deployment
+
+Use Docker Compose for a complete development environment:
+
+```bash
+docker-compose up --build
+```
+
+This starts:
+- MongoDB on port 27017
+- Redis on port 6379
+- Backend API on port 8000
+- Frontend on port 3000
+
 ## Optional: start Celery worker
 
 If you want background batch sweep processing through Redis/Celery:
@@ -78,6 +98,65 @@ celery -A app.celery_app.celery worker --loglevel=info
 ```
 
 If Redis is not available, batch jobs will automatically fall back to FastAPI `BackgroundTasks`.
+
+## Testing
+
+Run backend tests:
+```bash
+cd backend
+pytest tests/
+```
+
+Run frontend tests:
+```bash
+cd frontend
+yarn test
+```
+
+## CI/CD
+
+This project uses GitHub Actions for continuous integration. The CI pipeline runs:
+- Backend tests with pytest
+- Backend linting with flake8
+- Frontend tests with Jest
+
+## Security features
+
+- Strong password requirements (8+ chars, mixed case, numbers, special chars)
+- Rate limiting on authentication endpoints (5 attempts per 15 minutes)
+- JWT token-based authentication
+- CORS protection
+- Input validation with Pydantic models
+
+## Project architecture
+
+```
+plasma-bubbles/
+├── backend/                 # FastAPI backend
+│   ├── app/
+│   │   ├── auth.py         # Authentication & JWT
+│   │   ├── db.py           # MongoDB connection
+│   │   ├── models.py       # Pydantic models
+│   │   ├── routes_*.py     # API endpoints
+│   │   ├── celery_app.py   # Async task processing
+│   │   └── ibp_service.py  # Core IBP calculations
+│   ├── requirements.txt
+│   └── server.py           # FastAPI app entrypoint
+├── frontend/                # React frontend
+│   ├── src/
+│   │   ├── components/     # Reusable UI components
+│   │   ├── pages/          # Page components
+│   │   ├── context/        # React context providers
+│   │   └── lib/            # Utilities
+│   ├── package.json
+│   └── public/
+├── tests/                   # Backend tests
+├── docs/                    # Documentation assets
+├── .github/workflows/       # CI/CD pipelines
+├── docker-compose.yml       # Docker orchestration
+├── Dockerfile.*             # Container definitions
+└── README.md
+```
 
 ## Backend API overview
 
@@ -111,6 +190,8 @@ The backend serves API routes under `/api`:
 - Do not commit `.env` or secret credentials.
 - Add any local configuration and secrets to `.gitignore`.
 - The backend creates MongoDB indexes automatically on startup.
+- For production deployment, use environment variables for all secrets.
+- The health endpoint (`/api/health`) provides status of database and Redis connections.
 
 ## License
 
