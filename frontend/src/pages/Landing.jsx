@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Planet, Lightning, GridFour, ChartLineUp, Atom, Rocket, ArrowRight, Waveform, CheckCircle, Database } from "@phosphor-icons/react";
+import LandingDemo from "../components/LandingDemo";
 
 const FEATURES = [
   { icon: Atom, title: "Research-grade core", body: "Backed by the peer-reviewed ibpmodel package. Deterministic, reproducible, scientifically rigorous." },
@@ -78,6 +79,9 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* Live public demo widget — converts visitors before they sign up */}
+      <LandingDemo />
 
       {/* Features */}
       <section className="max-w-7xl mx-auto px-6 md:px-8 py-20 border-b border-[#2A2D35]">

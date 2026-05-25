@@ -98,6 +98,16 @@ async def seed_admin():
     db = get_db()
     email = os.environ.get("ADMIN_EMAIL", "admin@ibp.dev").lower()
     password = os.environ.get("ADMIN_PASSWORD", "admin123")
+    # Production safety warning — log loudly if the legacy weak password leaks
+    # into a deploy. The bootstrap admin bypasses the field_validator only
+    # because it's seeded directly; this banner is the audit trail.
+    if password in ("admin123", "password", "changeme"):
+        import logging
+        logging.getLogger("ibp").warning(
+            "ADMIN_PASSWORD looks weak (%s). Set a strong value in env before "
+            "promoting this build to production. See /app/memory/test_credentials.md.",
+            "***" + password[-2:],
+        )
     existing = await db.users.find_one({"email": email})
     if existing is None:
         await db.users.insert_one({

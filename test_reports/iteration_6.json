@@ -1,0 +1,35 @@
+{
+  "summary": "v1.6 fully validated. Full pytest suite 66/66 PASS (59 prior + 7 new for v1.6: TestAdminPasswordRotated x2, TestMongoRateLimit x2, TestPublicLandingEndpoints x3). All 4 deliverables verified end-to-end: (1) Admin login with NEW password AdminSecure1! returns 200 + Set-Cookie; OLD password admin123 returns 401. (2) MongoDB-backed rate-limiter: 5 failed login attempts -> 429; verified a document with attempts>=5 + expires_at TTL field exists in collection auth_attempts; successful login deletes the doc (clear_attempts). TTL index on expires_at with expireAfterSeconds=0 confirmed present via db.auth_attempts.index_information(). (3) Public no-auth endpoints: GET /api/public/worldmap-demo returns 200 with preview:true, caption, frames(48), lt_values, lats, lons, doy, f107, method (sklearn.GPR), first cold-hit ~9.1s, second cache hit <0.6s (>15x faster); GET /api/public/meta returns {model_source,platform:'IBP Analytics Platform',version:'1.5.1'}. Neither requires any Authorization header. (4) Frontend landing page /: [data-testid=landing-demo] visible, [data-testid=demo-plot] renders a Plotly geo (.js-plotly-plot present), [data-testid=demo-play] click toggles, [data-testid=demo-slider] input is functional, [data-testid=demo-cta] href=/register. Zero React errors / pageerrors detected on landing. (5) Sweep page regression after split into SweepHeader/SweepForm/SweepResult/EmptyState/RunningState/CompletedResult: all expected testids present (sweep-page, run-sweep-btn, download-csv-btn, download-nc-btn, download-parquet-btn, plot-export-png, plot-export-svg, plot-export-paper, plot-density-select). End-to-end: form prefilled with defaults, run-sweep clicked, job reached COMPLETED, contour heatmap rendered, download/export buttons all visible. (6) WorldMap + Butterfly pages still render (worldmap-page + butterfly-page testids present, plotly canvas rendered) - no testid regression after the lib/hooks.js + lib/usePlotExports.js + PlotToolbar refactor.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes_public.py uses a process-local in-memory dict for the 1-hour cache. Under uvicorn --workers >1 (or k8s replicas) this means each replica warms its own cache independently (first hit ~10s per pod). Fine for current single-worker setup; consider moving to Redis cache if scaling out.",
+    "auth_rate_limit.py uses email-only as the _id key. A determined attacker can lock out a known user by submitting bad passwords from any IP. Consider augmenting the key with IP (or rate-limiting per-IP separately) so legitimate users aren't denied service via username-enumeration spam.",
+    "public_meta() hardcodes version='1.5.1' while /api/health reports version='1.5.0'. Recommend centralising in a single constant (e.g. app.__version__) so the public footer and health endpoint cannot drift apart.",
+    "worldmap_demo() ignores the platform's `IBP_GRID_CAP` since it doesn't go through the auth/grid-cap path - that's intentional and safe (params are fixed), but worth a comment in the code so future maintainers don't add user-tunable params here.",
+    "routes_public.py /worldmap-demo is async but ibp_service.worldmap_grid is CPU-bound (sklearn GPR). On the first cold hit it blocks the event loop for ~10s. Consider asyncio.to_thread / loop.run_in_executor to avoid blocking other requests while the cache warms. Low priority since it's a 1-time hit per process.",
+    "LandingDemo Plotly uses staticPlot:true to suppress scrollZoom errors (per problem statement) - works correctly, no React errors observed. Slider + Play controls are local-state animations independent of Plotly's own controls, which is the right pattern."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added TestAdminPasswordRotated, TestMongoRateLimit, TestPublicLandingEndpoints - 7 new tests)"
+  ],
+  "success_rate": {"backend": "100% (66/66 pytest pass)", "frontend": "100% (landing demo + sweep e2e + worldmap/butterfly regression all green)"},
+  "test_credentials": "Admin admin@ibp.dev / AdminSecure1! - CONFIRMED WORKING. Old admin123 - CONFIRMED REJECTED (401).",
+  "seed_data_creation": "Throwaway test users prefixed test_*@ibp.dev and TEST_-prefixed jobs/experiments/keys/shares created during pytest. auth_attempts docs are auto-cleaned via TTL. No production data modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "v1.6 is fully validated. The full pytest suite is now 66 tests (TestAdminPasswordRotated, TestMongoRateLimit, TestPublicLandingEndpoints are new this iteration). Admin password is AdminSecure1! - update if rotated again. The public worldmap-demo first hit takes ~10s (sklearn GP regressor) then is cached in-process for 1h; the test allows up to 60s for first hit and asserts <2s for cache hit. Public /api/public/meta hard-codes version='1.5.1' while /api/health reports '1.5.0' - flagged as code-review comment only, not a defect. The Mongo TTL index test reads db.auth_attempts.index_information() directly using pymongo with MONGO_URL/DB_NAME from env. Frontend URL: https://space-weather-hub-1.preview.emergentagent.com.",
+  "rca of the issue": "No defects found in v1.6 features."
+}

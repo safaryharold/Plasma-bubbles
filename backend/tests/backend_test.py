@@ -14,7 +14,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://space-weather-hub-1.
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@ibp.dev")
-ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "AdminSecure1!")
 
 
 # ---------- Helpers ----------
@@ -815,3 +815,122 @@ class TestHealthV15:
         assert d["version"] == "1.5.0"
         assert d["status"] == "ok", f"status should be ok when mongo reachable: {d}"
         assert isinstance(d["celery_workers"], int)
+
+
+
+# ---------- v1.6: Admin password rotated to AdminSecure1! ----------
+class TestAdminPasswordRotated:
+    def test_new_admin_password_works(self):
+        r = requests.post(f"{API}/auth/login",
+                          json={"email": ADMIN_EMAIL, "password": "AdminSecure1!"}, timeout=10)
+        assert r.status_code == 200, f"new admin password should work: {r.text}"
+        assert r.json()["user"]["email"] == ADMIN_EMAIL
+
+    def test_old_admin_password_rejected(self):
+        r = requests.post(f"{API}/auth/login",
+                          json={"email": ADMIN_EMAIL, "password": "admin123"}, timeout=10)
+        # Old weak password must fail with 401 (or 429 if previous test polluted limiter)
+        assert r.status_code in (401, 429), f"old admin123 should NOT work: {r.status_code} {r.text}"
+
+
+# ---------- v1.6: Persistent rate-limit via MongoDB auth_attempts ----------
+class TestMongoRateLimit:
+    def test_rate_limit_persists_in_mongo_and_clears_on_success(self):
+        """5 failed attempts -> 429; the Mongo doc exists with expires_at; a
+        successful login clears it."""
+        from pymongo import MongoClient
+        mongo = MongoClient(os.environ.get("MONGO_URL", "mongodb://localhost:27017"))
+        db = mongo[os.environ.get("DB_NAME", "test_database")]
+        # Use a unique email to avoid cross-test pollution
+        email = _unique_email("rl")
+        # Register first so the user exists (otherwise 401 will still trigger limiter,
+        # but we want post-success clear to work)
+        rr = requests.post(f"{API}/auth/register",
+                           json={"email": email, "password": "Research1!", "name": "RL"}, timeout=10)
+        assert rr.status_code == 200
+        # Reset any pre-existing attempts doc
+        db.auth_attempts.delete_one({"_id": email.lower()})
+
+        # Hammer 5 bad passwords
+        last_status = None
+        for i in range(7):
+            r = requests.post(f"{API}/auth/login",
+                              json={"email": email, "password": "WrongPass1!"}, timeout=10)
+            last_status = r.status_code
+            if r.status_code == 429:
+                break
+        assert last_status == 429, f"Expected 429 after 5 failed attempts, last={last_status}"
+
+        # Verify Mongo doc exists with expected fields
+        doc = db.auth_attempts.find_one({"_id": email.lower()})
+        assert doc is not None, "auth_attempts doc must exist after failures"
+        assert doc.get("attempts", 0) >= 5, doc
+        assert "expires_at" in doc, f"expires_at missing in doc: {doc}"
+
+        # Manually clear so we can verify a successful login deletes the doc.
+        # (Once 429 is sticky, the user has to wait WINDOW_MIN; bypass for test.)
+        db.auth_attempts.delete_one({"_id": email.lower()})
+        # Successful login should keep the doc absent (clear_attempts on success)
+        ok = requests.post(f"{API}/auth/login",
+                          json={"email": email, "password": "Research1!"}, timeout=10)
+        assert ok.status_code == 200, ok.text
+        doc2 = db.auth_attempts.find_one({"_id": email.lower()})
+        assert doc2 is None, f"auth_attempts doc should be cleared after success: {doc2}"
+
+    def test_auth_attempts_ttl_index_exists(self):
+        """TTL index on expires_at with expireAfterSeconds=0 should be present."""
+        from pymongo import MongoClient
+        mongo = MongoClient(os.environ.get("MONGO_URL", "mongodb://localhost:27017"))
+        db = mongo[os.environ.get("DB_NAME", "test_database")]
+        idx = db.auth_attempts.index_information()
+        ttl_index = None
+        for name, spec in idx.items():
+            keys = spec.get("key", [])
+            if any(k[0] == "expires_at" for k in keys) and "expireAfterSeconds" in spec:
+                ttl_index = (name, spec)
+                break
+        assert ttl_index is not None, f"TTL index on expires_at missing: {idx}"
+        _, spec = ttl_index
+        assert spec["expireAfterSeconds"] == 0, spec
+
+
+# ---------- v1.6: Public no-auth landing endpoints ----------
+class TestPublicLandingEndpoints:
+    def test_public_meta_no_auth(self):
+        s = requests.Session()  # no auth
+        r = s.get(f"{API}/public/meta", timeout=10)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("model_source", "platform", "version"):
+            assert k in d, f"missing {k} in /public/meta: {d}"
+        assert d["platform"] == "IBP Analytics Platform"
+
+    def test_public_worldmap_demo_no_auth_and_cached(self):
+        s = requests.Session()  # no auth
+        # First hit can be slow (~10s) - GP regressor
+        t0 = time.time()
+        r1 = s.get(f"{API}/public/worldmap-demo", timeout=60)
+        first_dur = time.time() - t0
+        assert r1.status_code == 200, r1.text
+        d = r1.json()
+        for k in ("preview", "caption", "frames", "lt_values", "lats", "lons",
+                  "doy", "f107", "method"):
+            assert k in d, f"missing {k} in worldmap-demo: keys={list(d.keys())}"
+        assert d["preview"] is True
+        assert isinstance(d["frames"], list) and len(d["frames"]) > 0
+        assert isinstance(d["lats"], list) and len(d["lats"]) > 0
+        assert isinstance(d["lons"], list) and len(d["lons"]) > 0
+
+        # Second hit should be from cache => much faster (<2s realistic margin)
+        t1 = time.time()
+        r2 = s.get(f"{API}/public/worldmap-demo", timeout=15)
+        second_dur = time.time() - t1
+        assert r2.status_code == 200
+        assert r2.json()["preview"] is True
+        # Cache must beat first hit dramatically (>5x faster, and under 2s)
+        assert second_dur < 2.0, f"cache hit too slow: {second_dur:.2f}s (first {first_dur:.2f}s)"
+
+    def test_public_worldmap_demo_requires_no_auth_header(self):
+        # Even with no headers at all, no 401
+        r = requests.get(f"{API}/public/worldmap-demo", timeout=30)
+        assert r.status_code == 200

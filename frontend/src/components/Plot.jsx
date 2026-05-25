@@ -1,7 +1,8 @@
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
-import { DownloadSimple, FileImage, FilePdf } from "@phosphor-icons/react";
+import PlotToolbar from "./PlotToolbar";
+import { usePlotExports } from "../lib/usePlotExports";
 
 const Plot = createPlotlyComponent(Plotly);
 
@@ -12,14 +13,8 @@ const AXIS = {
   linecolor: "#2A2D35",
 };
 
-// Publisher-safe palette (Viridis perceptually uniform & colorblind-friendly)
-const PUB_COLORSCALE = "Viridis";
-
 const DENSITY_TO_STEP = {
-  coarse:   0.10,
-  standard: 0.05,
-  fine:     0.025,
-  ultra:    0.0125,
+  coarse: 0.10, standard: 0.05, fine: 0.025, ultra: 0.0125,
 };
 
 function classify(ibp) {
@@ -51,8 +46,8 @@ function timeTicks(lts) {
 
 /**
  * Smooth 2-D filled-contour heatmap of IBP over Longitude × Local-Time.
- * Includes a lightweight export toolbar (PNG / SVG / Paper) and configurable
- * contour-density.
+ * Slim wrapper around Plotly — the export toolbar and Plotly.toImage
+ * plumbing live in `PlotToolbar` and `usePlotExports`.
  */
 export function ContourHeatmap({
   lons, lts, matrix,
@@ -60,12 +55,35 @@ export function ContourHeatmap({
   diff = false,
   height = 560,
   compact = false,
-  meta = null, // { configHash, modelSource, jobId }
+  meta = null,
   defaultDensity = "standard",
 }) {
   const wrapperRef = useRef(null);
   const [density, setDensity] = useState(defaultDensity);
-  const [busy, setBusy] = useState(null); // 'png' | 'svg' | 'paper'
+
+  const baseName = useCallback(() => {
+    const parts = ["ibp"];
+    if (doy != null) parts.push(`doy${doy}`);
+    if (f107 != null) parts.push(`f107_${f107}`);
+    if (meta?.jobId) parts.push(meta.jobId.slice(0, 8));
+    return parts.join("_");
+  }, [doy, f107, meta]);
+
+  const captionLines = useCallback(() => {
+    const lines = [];
+    const tag = [];
+    if (doy != null) tag.push(`DOY ${doy}`);
+    if (f107 != null) tag.push(`F10.7 = ${f107}`);
+    if (tag.length) lines.push(tag.join("  ·  "));
+    if (meta?.modelSource) lines.push(`Model: ${meta.modelSource}`);
+    if (meta?.configHash) lines.push(`Config hash: ${meta.configHash}`);
+    lines.push("Reference: Rino & Carrano, ibpmodel — IBP Analytics Platform");
+    return lines;
+  }, [doy, f107, meta]);
+
+  const { busy, exportImage, exportPaper } = usePlotExports({
+    wrapperRef, baseName, captionLines,
+  });
 
   const z = lts.map((_, j) => lons.map((_, i) => matrix[i][j]));
   const customdata = z.map((row) => row.map((v) => classify(v)));
@@ -74,134 +92,21 @@ export function ContourHeatmap({
     : "Viridis";
   const { tickvals, ticktext } = timeTicks(lts);
 
-  const headline =
-    title ||
-    (doy != null && f107 != null
+  const headline = title
+    || (doy != null && f107 != null
       ? `IBP index at DOY ${doy} with F10.7 = ${f107}`
       : "IBP index");
 
   const contourSize = DENSITY_TO_STEP[density] || 0.05;
 
-  const findGd = () => {
-    const gd = wrapperRef.current?.querySelector(".js-plotly-plot");
-    return gd;
-  };
-
-  const downloadFile = (dataUrl, filename) => {
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
-
-  const baseFilename = () => {
-    const safe = (s) => String(s).replace(/[^a-z0-9]+/gi, "_").slice(0, 40);
-    const parts = ["ibp"];
-    if (doy != null) parts.push(`doy${doy}`);
-    if (f107 != null) parts.push(`f107_${f107}`);
-    if (meta?.jobId) parts.push(safe(meta.jobId).slice(0, 8));
-    return parts.join("_");
-  };
-
-  const exportImage = async (format) => {
-    const gd = findGd();
-    if (!gd) return;
-    setBusy(format);
-    try {
-      const url = await Plotly.toImage(gd, {
-        format,
-        width: 1400, height: 900,
-        scale: format === "svg" ? 1 : 2,
-      });
-      downloadFile(url, `${baseFilename()}.${format}`);
-    } finally { setBusy(null); }
-  };
-
-  // 300 DPI publication export with auto-caption
-  const exportPaper = async () => {
-    const gd = findGd();
-    if (!gd) return;
-    setBusy("paper");
-    try {
-      // Letter @ 300 DPI ≈ 2400 × 1500
-      const W = 2400, H = 1500, SCALE = 2;
-      const captionLines = [];
-      const tag = [];
-      if (doy != null) tag.push(`DOY ${doy}`);
-      if (f107 != null) tag.push(`F10.7 = ${f107}`);
-      if (tag.length) captionLines.push(tag.join("  ·  "));
-      if (meta?.modelSource) captionLines.push(`Model: ${meta.modelSource}`);
-      if (meta?.configHash) captionLines.push(`Config hash: ${meta.configHash}`);
-      captionLines.push("Reference: Rino & Carrano, ibpmodel — IBP Analytics Platform");
-      const caption = captionLines.join("\n");
-
-      // Build a publication layout snapshot via toImage with overrides
-      const url = await Plotly.toImage(gd, {
-        format: "png",
-        width: W, height: H, scale: SCALE,
-      });
-
-      // Composite caption underneath using a canvas
-      const img = new Image();
-      img.src = url;
-      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-
-      const captionH = 220;
-      const canvas = document.createElement("canvas");
-      canvas.width = W * SCALE;
-      canvas.height = H * SCALE + captionH;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, H * SCALE);
-
-      // Caption block
-      ctx.fillStyle = "#0B0D11";
-      ctx.font = "32px 'JetBrains Mono', monospace";
-      let y = H * SCALE + 50;
-      for (const line of captionLines) {
-        ctx.fillText(line, 50, y);
-        y += 42;
-      }
-
-      const finalUrl = canvas.toDataURL("image/png");
-      downloadFile(finalUrl, `${baseFilename()}_paper.png`);
-    } finally { setBusy(null); }
-  };
-
   return (
     <div className="bg-[#090A0C] border border-[#2A2D35]" data-testid="plot-surface" ref={wrapperRef}>
-      <div className="px-4 py-2 border-b border-[#2A2D35] mono text-[10px] uppercase tracking-[0.25em] text-[#8B93A5] flex items-center justify-between gap-3 flex-wrap">
-        <span>— {headline}</span>
-        <div className="flex items-center gap-2">
-          <label className="text-[#565D6D] mr-1">density</label>
-          <select value={density} onChange={(e) => setDensity(e.target.value)}
-            data-testid="plot-density-select"
-            className="bg-[#090A0C] border border-[#2A2D35] text-white px-2 h-7 mono text-[10px] uppercase tracking-[0.2em]">
-            <option value="coarse">coarse</option>
-            <option value="standard">standard</option>
-            <option value="fine">fine</option>
-            <option value="ultra">ultra</option>
-          </select>
-          <button onClick={() => exportImage("png")} disabled={busy != null}
-            data-testid="plot-export-png"
-            className="h-7 px-2 border border-[#2A2D35] hover:border-[#0047FF] hover:text-[#0047FF] text-white flex items-center gap-1 transition-colors disabled:opacity-40">
-            <FileImage size={12} /> {busy === "png" ? "..." : "png"}
-          </button>
-          <button onClick={() => exportImage("svg")} disabled={busy != null}
-            data-testid="plot-export-svg"
-            className="h-7 px-2 border border-[#2A2D35] hover:border-[#0047FF] hover:text-[#0047FF] text-white flex items-center gap-1 transition-colors disabled:opacity-40">
-            <DownloadSimple size={12} /> {busy === "svg" ? "..." : "svg"}
-          </button>
-          <button onClick={exportPaper} disabled={busy != null}
-            data-testid="plot-export-paper"
-            className="h-7 px-2 bg-[#FDCA26] hover:bg-[#FFE066] text-[#090A0C] font-bold flex items-center gap-1 transition-colors disabled:opacity-40">
-            <FilePdf size={12} weight="fill" /> {busy === "paper" ? "rendering..." : "paper · 300dpi"}
-          </button>
-        </div>
-      </div>
+      <PlotToolbar
+        title={headline}
+        density={density} onDensityChange={setDensity}
+        busy={busy} onExport={exportImage} onExportPaper={exportPaper}
+        testIdPrefix="plot"
+      />
       <Plot
         data={[{
           type: "contour",
@@ -210,11 +115,8 @@ export function ContourHeatmap({
           colorscale,
           zmin: diff ? -1 : 0, zmax: 1, zmid: diff ? 0 : undefined,
           contours: {
-            coloring: "fill",
-            showlines: true,
-            start: diff ? -1 : 0,
-            end: 1,
-            size: contourSize,
+            coloring: "fill", showlines: true,
+            start: diff ? -1 : 0, end: 1, size: contourSize,
           },
           line: { smoothing: 1, width: 0.4, color: "rgba(255,255,255,0.08)" },
           connectgaps: true,
@@ -254,12 +156,10 @@ export function ContourHeatmap({
           },
         }}
         config={{
-          displaylogo: false,
-          responsive: true,
+          displaylogo: false, responsive: true,
           modeBarButtonsToRemove: ["lasso2d", "select2d"],
           toImageButtonOptions: {
-            format: "png",
-            filename: baseFilename(),
+            format: "png", filename: baseName(),
             width: 1400, height: 900, scale: 2,
           },
         }}
@@ -270,7 +170,6 @@ export function ContourHeatmap({
   );
 }
 
-// Backward-compat aliases — Sweep/Compare/PublicShare import these names.
 export const Surface3D = ContourHeatmap;
 export const Heatmap = ContourHeatmap;
 
