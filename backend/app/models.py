@@ -1,14 +1,24 @@
 """Pydantic request/response models."""
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional, List, Any
 from datetime import datetime
+import re
 
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128, pattern=r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]", description="Password must be at least 8 characters with uppercase, lowercase, number, and special character")
+    password: str = Field(min_length=8, max_length=128, description="Password must be at least 8 characters with uppercase, lowercase, number, and special character")
     name: str = Field(min_length=1, max_length=80)
     role: Optional[str] = Field(default="researcher", pattern="^(researcher|pro)$")
+
+    @field_validator("password")
+    @classmethod
+    def _strong_password(cls, v: str) -> str:
+        if not re.search(r"[a-z]", v): raise ValueError("password must contain a lowercase letter")
+        if not re.search(r"[A-Z]", v): raise ValueError("password must contain an uppercase letter")
+        if not re.search(r"\d", v): raise ValueError("password must contain a digit")
+        if not re.search(r"[@$!%*?&]", v): raise ValueError("password must contain a special character (@$!%*?&)")
+        return v
 
 
 class LoginRequest(BaseModel):

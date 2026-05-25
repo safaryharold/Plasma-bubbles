@@ -46,11 +46,11 @@ def admin_token():
 def researcher():
     email = _unique_email("researcher")
     r = requests.post(f"{API}/auth/register",
-                      json={"email": email, "password": "research123", "name": "Test Researcher"},
+                      json={"email": email, "password": "Research1!", "name": "Test Researcher"},
                       timeout=10)
     assert r.status_code == 200, f"Register failed: {r.text}"
     data = r.json()
-    return {"email": email, "password": "research123", "token": data["access_token"], "user": data["user"]}
+    return {"email": email, "password": "Research1!", "token": data["access_token"], "user": data["user"]}
 
 
 # ---------- Meta ----------
@@ -69,7 +69,7 @@ class TestAuth:
     def test_register_and_login(self):
         email = _unique_email("auth")
         r = requests.post(f"{API}/auth/register",
-                          json={"email": email, "password": "pw123456", "name": "A B"}, timeout=10)
+                          json={"email": email, "password": "PwPass1!", "name": "A B"}, timeout=10)
         assert r.status_code == 200
         body = r.json()
         assert body["user"]["email"] == email
@@ -77,13 +77,13 @@ class TestAuth:
         assert body["access_token"]
 
         # login with same creds
-        r2 = requests.post(f"{API}/auth/login", json={"email": email, "password": "pw123456"}, timeout=10)
+        r2 = requests.post(f"{API}/auth/login", json={"email": email, "password": "PwPass1!"}, timeout=10)
         assert r2.status_code == 200
         assert r2.json()["access_token"]
 
     def test_register_duplicate(self, researcher):
         r = requests.post(f"{API}/auth/register",
-                          json={"email": researcher["email"], "password": "research123", "name": "dup"}, timeout=10)
+                          json={"email": researcher["email"], "password": "Research1!", "name": "dup"}, timeout=10)
         assert r.status_code == 400
 
     def test_login_bad_password(self, researcher):
@@ -197,7 +197,7 @@ class TestBatchSweep:
         # Create a job as a brand-new user
         other_email = _unique_email("other")
         r = requests.post(f"{API}/auth/register",
-                          json={"email": other_email, "password": "pw123456", "name": "Other"}, timeout=10)
+                          json={"email": other_email, "password": "PwPass1!", "name": "Other"}, timeout=10)
         other_token = r.json()["access_token"]
         h_other = {"Authorization": f"Bearer {other_token}"}
 
@@ -394,7 +394,7 @@ class TestRegisterNoRole:
     def test_register_without_role_defaults_researcher(self):
         email = _unique_email("no_role")
         r = requests.post(f"{API}/auth/register",
-                          json={"email": email, "password": "pw123456", "name": "NR"},
+                          json={"email": email, "password": "PwPass1!", "name": "NR"},
                           timeout=10)
         assert r.status_code == 200
         assert r.json()["user"]["role"] == "researcher"
@@ -403,7 +403,7 @@ class TestRegisterNoRole:
         """Backend should ignore/sanitize role even if sent (v1.1 all are researcher)."""
         email = _unique_email("role_ignored")
         r = requests.post(f"{API}/auth/register",
-                          json={"email": email, "password": "pw123456",
+                          json={"email": email, "password": "PwPass1!",
                                 "name": "RI", "role": "pro"}, timeout=10)
         assert r.status_code == 200
         # It's acceptable either to ignore to researcher (v1.1 intent) or honor.
@@ -633,7 +633,7 @@ class TestShare:
         # register a brand-new user; they don't own these jobs
         other_email = _unique_email("sh_other")
         r = requests.post(f"{API}/auth/register",
-                          json={"email": other_email, "password": "pw123456", "name": "O"}, timeout=10)
+                          json={"email": other_email, "password": "PwPass1!", "name": "O"}, timeout=10)
         other_token = r.json()["access_token"]
         r = requests.post(f"{API}/share/compare",
                           headers={"Authorization": f"Bearer {other_token}"},
@@ -643,3 +643,96 @@ class TestShare:
     def test_public_share_bad_token(self):
         r = requests.get(f"{API}/public/share/does-not-exist", timeout=10)
         assert r.status_code == 404
+
+
+
+# ---------- v1.3: Butterfly diagram (Month x Longitude at fixed LT) ----------
+class TestButterfly:
+    def test_butterfly_default(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/butterfly?lt=21&f107=150&lon_step=15",
+                         headers=headers, timeout=60)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        # Must return 12 months, lons array, matrix shape (n_lon, 12) per spec, plus summary
+        for k in ("lons", "matrix", "summary"):
+            assert k in d, f"missing {k}"
+        # Months key may be 'months' or implicit (12 cols). Accept either.
+        assert isinstance(d["lons"], list) and len(d["lons"]) > 1
+        mat = d["matrix"]
+        # Spec says matrix shape (n_lon, 12). Be flexible: accept either orientation.
+        rows, cols = len(mat), len(mat[0])
+        assert {rows, cols} == {len(d["lons"]), 12}, f"unexpected matrix shape {rows}x{cols} vs lons={len(d['lons'])}"
+        # Bounded
+        flat = [v for row in mat for v in row]
+        assert min(flat) >= 0.0 and max(flat) <= 1.0
+        # Summary should have hotspots
+        summary = d["summary"]
+        assert "hotspots" in summary
+        assert isinstance(summary["hotspots"], list) and len(summary["hotspots"]) >= 1
+
+    def test_butterfly_bad_lt(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/butterfly?lt=30&f107=150&lon_step=15",
+                         headers=headers, timeout=10)
+        assert r.status_code == 400
+
+    def test_butterfly_bad_f107(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/butterfly?lt=21&f107=500&lon_step=15",
+                         headers=headers, timeout=10)
+        assert r.status_code == 400
+
+    def test_butterfly_bad_lon_step(self, researcher):
+        headers = {"Authorization": f"Bearer {researcher['token']}"}
+        r = requests.get(f"{API}/ibp/butterfly?lt=21&f107=150&lon_step=0",
+                         headers=headers, timeout=10)
+        assert r.status_code in (400, 422)
+
+    def test_butterfly_requires_auth(self):
+        r = requests.get(f"{API}/ibp/butterfly?lt=21&f107=150&lon_step=15", timeout=10)
+        assert r.status_code in (401, 403)
+
+
+# ---------- v1.3: Password policy (regex lookahead -> field_validator) ----------
+class TestPasswordPolicy:
+    def test_weak_password_no_uppercase_returns_422(self):
+        email = _unique_email("weakup")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": email, "password": "weakpass1!", "name": "Weak"},
+                          timeout=10)
+        # field_validator -> 422 (pydantic), with clear message NOT 500
+        assert r.status_code in (400, 422), f"got {r.status_code}: {r.text}"
+        assert "uppercase" in r.text.lower() or "password" in r.text.lower()
+
+    def test_weak_password_no_special_returns_422(self):
+        email = _unique_email("weaksp")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": email, "password": "WeakPass1", "name": "Weak"},
+                          timeout=10)
+        assert r.status_code in (400, 422)
+        assert "special" in r.text.lower() or "password" in r.text.lower()
+
+    def test_weak_password_no_digit_returns_422(self):
+        email = _unique_email("weakdg")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": email, "password": "WeakPass!", "name": "Weak"},
+                          timeout=10)
+        assert r.status_code in (400, 422)
+
+    def test_weak_password_too_short_returns_422(self):
+        email = _unique_email("weaksh")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": email, "password": "Aa1!aa", "name": "Weak"},
+                          timeout=10)
+        assert r.status_code in (400, 422)
+
+    def test_strong_password_registers_ok(self):
+        email = _unique_email("strong")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": email, "password": "StrongPass1!", "name": "Strong"},
+                          timeout=10)
+        # Note: existing seed tests use "PwPass1!" (weak) - if these still pass, validator
+        # might be bypassed somewhere; we report regardless.
+        assert r.status_code == 200, f"strong password rejected: {r.text}"
+        assert r.json()["user"]["email"] == email

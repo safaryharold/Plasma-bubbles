@@ -1,0 +1,41 @@
+{
+  "summary": "v1.3 validated. 52/54 backend pytest pass; 2 failures are pre-existing Celery-down regressions (compute_backend reports 'background_tasks' instead of 'celery', 0 workers active). All v1.3 features confirmed: GET /api/ibp/butterfly returns 12 months x lons matrix + summary + hotspots (param validation 400 for bad lt/f107/lon_step), worldmap still works, password policy field_validator returns 422 with clear messages for missing uppercase/lowercase/digit/special/length and accepts strong passwords. Frontend smoke: Butterfly page (12-month x longitude viridis contour heatmap, min/max/mean/p95 summary, top hotspots, PNG/SVG/Paper export buttons all present), WorldMap page (discrete viridis bands legend 0.0-0.1...0.9-1.0, dotted day/night terminator, sun marker, 24h slider, Play animates UTC 21:00->22:30 in 2.5s, speed selector 1.5x), Sweep page (plot-density-select with 4 options coarse/standard/fine/ultra, PNG/SVG/Paper export buttons all clickable without crash, contour heatmap renders).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/ibp/meta + /api/ibp/queue/stats", "issue": "compute_backend reports 'background_tasks' and queue_stats shows 0 celery workers - Celery worker appears to be down (regression from iteration_3 which passed both these checks). Backend still functions via the in-process BackgroundTasks fallback, batch jobs still complete; this is a deployment/supervisor issue not a v1.3 bug. Affects TestMetaCelery::test_meta_reports_celery and TestBatchCelery::test_batch_dispatches_to_celery_workers."},
+      {"endpoint": "POST /api/ibp/batch", "issue": "Pre-existing carry-over: JobOut pydantic model does not expose 'worker'/'task_id' fields (persisted in Mongo, not returned)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Check Celery worker supervisor status: `sudo supervisorctl status` then restart celery worker if down. Backend /api/ibp/meta should report compute_backend='celery' and /api/ibp/queue/stats should report workers>=1. Pre-existing in this run; not blocking v1.3.",
+    "(Optional) Expose 'worker' and 'task_id' on JobOut response model so frontend can show which backend executed the job (long-standing minor)."
+  ],
+  "critical_code_review_comments": [
+    "models.py field_validator on RegisterRequest.password correctly replaces the unsupported lookahead regex with sequential re.search() checks; pydantic-core rust regex limitation cleanly worked around; returns 422 with a clear `password must contain ...` message (not 500). Verified for all 4 character classes + length.",
+    "routes_ibp.butterfly: clean parameter validation [lt 0..24, f107 60..300, lon_step 1..60] with explicit 400; rate-limit applied via rate_limit.check(user); delegates to ibp_service.butterfly_grid.",
+    "Butterfly.jsx: dedicated page with bf-lt/bf-f107/bf-lonstep/bf-run/bf-export-{png,svg,paper}/butterfly-hotspots testids; identical export toolbar pattern as ContourHeatmap.",
+    "WorldMap.jsx: animated rAF play loop verified live (UTC 21:00->22:30 within 2.5s at 1.5x speed); discrete 8-stop viridis band legend visible (0.0-0.1, 0.1-0.3, ..., 0.9-1.0); dotted day/night terminator and yellow sun marker both render; speed selector, UTC readout, play/pause toggle all wired.",
+    "Plot.jsx ContourHeatmap: plot-density-select offers exactly 4 options (coarse/standard/fine/ultra) and the 3 export buttons (plot-export-png, plot-export-svg, plot-export-paper) are clickable on Sweep without throwing; Plotly.toImage + canvas caption pattern is correct.",
+    "Layout.jsx + App.js: /butterfly route + nav link with Butterfly icon added cleanly alongside other pages."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "96% (52/54 pytest) - 2 failures are Celery infra, not v1.3", "frontend": "100% v1.3 testids present + animated play loop + exports verified end-to-end via browser automation on Butterfly, WorldMap, Sweep"},
+  "test_credentials": "Admin admin@ibp.dev / admin123 (verified working). NOTE: existing test fixtures had to be updated to use strong passwords (PwPass1!, Research1!) because the new field_validator now correctly rejects weak passwords like 'pw123456' / 'research123' from prior iterations.",
+  "seed_data_creation": "Tests create TEST_-prefixed sweeps/experiments/keys/shares under ephemeral researcher users with strong passwords. No production data modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All passwords in backend_test.py have been migrated from weak ('pw123456', 'research123') to strong ('PwPass1!', 'Research1!') to satisfy the new field_validator. test_credentials.md still says 'research123' for the Test Research User - main agent may want to update that note to a strong password if the test creds doc is consumed by other automation. Celery worker was offline at the time of this run (compute_backend='background_tasks', 0 workers) - 2 pre-existing tests fail because of this, NOT because of v1.3. Backend URL: https://space-weather-hub-1.preview.emergentagent.com.",
+  "rca of the issue": "No v1.3 defects. The 2 failing tests (TestMetaCelery, TestBatchCelery) fail because the Celery worker is not running in the preview env at the time of this test run (regression vs iteration_3 which reported celery up). Backend gracefully falls back to FastAPI BackgroundTasks so batch jobs still complete. Recommendation: `sudo supervisorctl restart celery` or equivalent."
+}

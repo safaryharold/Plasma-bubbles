@@ -3,7 +3,7 @@ import { NavLink, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   Gauge, Calculator, GridFour, Flask, ArrowsLeftRight,
-  Key, Users, SignOut, Planet, Globe,
+  Key, Users, SignOut, Planet, Globe, Butterfly,
 } from "@phosphor-icons/react";
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/calculator", label: "Calculator", icon: Calculator, test: "nav-calculator" },
   { to: "/sweep", label: "Parameter Sweep", icon: GridFour, test: "nav-sweep" },
   { to: "/worldmap", label: "World Map", icon: Globe, test: "nav-worldmap" },
+  { to: "/butterfly", label: "Butterfly", icon: Butterfly, test: "nav-butterfly" },
   { to: "/experiments", label: "Experiments", icon: Flask, test: "nav-experiments" },
   { to: "/compare", label: "A/B Compare", icon: ArrowsLeftRight, test: "nav-compare" },
   { to: "/keys", label: "API Keys", icon: Key, test: "nav-keys" },

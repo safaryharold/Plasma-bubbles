@@ -62,10 +62,12 @@ function terminatorLine(subLon, declDeg) {
   const decl = (declDeg * Math.PI) / 180.0;
   const lons = [];
   const lats = [];
+  // Guard: when |decl| is near zero, terminator is two meridians; use small floor.
+  const tanDecl = Math.tan(decl) === 0 ? 1e-6 : Math.tan(decl);
   for (let lon = -180; lon <= 180; lon += 1) {
     const dlon = ((lon - subLon) * Math.PI) / 180.0;
-    // Terminator equation: tan(lat) = -cos(dlon) / tan(decl)
-    const lat = Math.atan2(-Math.cos(dlon), Math.tan(decl)) * (180.0 / Math.PI);
+    // Standard great-circle terminator: lat = atan(-cos(Δλ) / tan(decl))
+    const lat = Math.atan(-Math.cos(dlon) / tanDecl) * (180.0 / Math.PI);
     lons.push(lon);
     lats.push(lat);
   }

@@ -291,3 +291,15 @@ async def worldmap(day_month: int = 3, f107: float = 150.0, lon_step: float = 10
     if not (0.5 <= lat_step <= 10):
         raise HTTPException(status_code=400, detail="lat_step must be 0.5..10")
     return ibp_service.worldmap_grid(day_month, f107, lon_step, lat_half_range=25.0, lat_step=lat_step)
+
+
+# --- Butterfly diagram (Month × Longitude at fixed LT) ---
+@router.get("/butterfly")
+async def butterfly(lt: float = 21.0, f107: float = 150.0, lon_step: float = 5.0,
+                    user: dict = Depends(get_current_user)):
+    """Compute IBP climatology over Month × Longitude at a fixed Local Time."""
+    rate_limit.check(user)
+    if not (0 <= lt <= 24) or not (60 <= f107 <= 300) or not (1 <= lon_step <= 60):
+        raise HTTPException(status_code=400, detail="invalid params")
+    return ibp_service.butterfly_grid(lt=lt, f107=f107, lon_step=lon_step)
+

@@ -168,6 +168,11 @@ export default function Sweep() {
                 doy={viz.doy}
                 f107={viz.params?.f107}
                 height={480}
+                meta={{
+                  configHash: job.config_hash,
+                  jobId: job.id,
+                  modelSource: viz.model_source || viz.method || "ibpmodel surrogate-v1",
+                }}
               />
               <div className="grid grid-cols-2 gap-0 border-t border-[#2A2D35]">
                 <div className="p-4 border-r border-[#2A2D35]">

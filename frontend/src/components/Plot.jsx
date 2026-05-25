@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
-import { DownloadSimple, FileImage, FilePdf, CaretDown } from "@phosphor-icons/react";
+import { DownloadSimple, FileImage, FilePdf } from "@phosphor-icons/react";
 
 const Plot = createPlotlyComponent(Plotly);
 

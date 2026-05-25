@@ -262,3 +262,45 @@ def worldmap_grid(day_month: int, f107: float, lon_step: float = 10.0,
         "method": "sklearn.GPR upscaled + physical-magnetic-equator envelope",
         "raw_grid": {"lons": lons, "lats": [float(x) for x in lats]},
     }
+
+
+
+def butterfly_grid(lt: float, f107: float, lon_step: float = 5.0) -> dict:
+    """Climatology 'butterfly' diagram: Month (1-12) × Longitude at fixed LT.
+
+    Mirrors the standard space-weather butterfly view used to study seasonal /
+    longitudinal patterns of post-sunset bubble occurrence.
+    """
+    lons = list(range(-180, 181, int(max(1, lon_step))))
+    months = list(range(1, 13))
+    matrix = []  # shape: (n_lon, n_month) — caller expects matrix[i_lon][j_month]
+    summary_hotspots = []
+    all_vals = []
+    for ln in lons:
+        row = []
+        for m in months:
+            df = calculate(m, [ln], [lt], f107)
+            v = float(df.iloc[0]["IBP"])
+            row.append(v)
+            all_vals.append((v, ln, m))
+        matrix.append(row)
+
+    arr = np.array(matrix)
+    flat = sorted(all_vals, key=lambda x: -x[0])[:8]
+    summary_hotspots = [{"IBP": float(v), "Lon": float(ln), "Month": int(m)} for v, ln, m in flat]
+
+    return {
+        "lt": lt,
+        "f107": f107,
+        "lons": [float(x) for x in lons],
+        "months": months,
+        "matrix": matrix,
+        "summary": {
+            "ibp_min": float(arr.min()),
+            "ibp_max": float(arr.max()),
+            "ibp_mean": float(arr.mean()),
+            "ibp_p95": float(np.percentile(arr, 95)),
+            "hotspots": summary_hotspots,
+        },
+        "method": MODEL_SOURCE,
+    }
