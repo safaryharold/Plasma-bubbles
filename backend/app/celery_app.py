@@ -103,8 +103,8 @@ def dispatch_batch(job_id: str, params: dict, background_tasks=None):
             logger.exception("celery dispatch failed, falling back: %s", exc)
     # Fallback path — keeps environment working without Redis
     if background_tasks is not None:
-        from .routes_ibp import _run_batch_job
-        background_tasks.add_task(_run_batch_job, job_id, params)
+        from .tasks_local import run_batch_job
+        background_tasks.add_task(run_batch_job, job_id, params)
     return "background_tasks"
 
 

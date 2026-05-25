@@ -54,39 +54,9 @@ async def calculate(body: IBPCalculateRequest, user: dict = Depends(get_current_
 
 
 async def _run_batch_job(job_id: str, params: dict):
-    """In-process fallback runner (used when Celery is unavailable)."""
-    db = get_db()
-    now = datetime.now(timezone.utc).isoformat()
-    await db.ibp_jobs.update_one({"id": job_id},
-                                 {"$set": {"status": "RUNNING", "started_at": now,
-                                           "worker": "background_tasks"}})
-    try:
-        lons, lts = ibp_service.compute_grid(params)
-        df = ibp_service.calculate(params["day_month"], lons, lts, params["f107"])
-        grid = {}
-        for _, row in df.iterrows():
-            grid.setdefault(float(row["Lon"]), {})[float(row["LT"])] = float(row["IBP"])
-        summary = {
-            "count": int(len(df)),
-            "ibp_min": float(df["IBP"].min()), "ibp_max": float(df["IBP"].max()),
-            "ibp_mean": float(df["IBP"].mean()), "ibp_p95": float(df["IBP"].quantile(0.95)),
-            "hotspots": df.nlargest(5, "IBP")[["Lon", "LT", "IBP"]].to_dict(orient="records"),
-        }
-        result_doc = {
-            "lons": lons, "lts": lts,
-            "matrix": [[grid.get(ln, {}).get(t, 0.0) for t in lts] for ln in lons],
-            "doy": int(df.iloc[0]["Doy"]), "month": int(df.iloc[0]["Month"]),
-        }
-        await db.ibp_jobs.update_one(
-            {"id": job_id},
-            {"$set": {"status": "COMPLETED",
-                      "completed_at": datetime.now(timezone.utc).isoformat(),
-                      "summary": summary, "result": result_doc}})
-    except Exception as exc:
-        await db.ibp_jobs.update_one(
-            {"id": job_id},
-            {"$set": {"status": "FAILED", "error": str(exc),
-                      "completed_at": datetime.now(timezone.utc).isoformat()}})
+    """Backwards-compat thin re-export — actual runner lives in tasks_local."""
+    from .tasks_local import run_batch_job
+    await run_batch_job(job_id, params)
 
 
 @router.post("/batch", response_model=JobOut)
@@ -182,12 +152,57 @@ async def viz(job_id: str, smooth: int = 1, user: dict = Depends(get_current_use
     return payload
 
 
-# --- Multi-format download ---
-@router.get("/download/{job_id}")
-async def download(job_id: str, format: str = "csv", user: dict = Depends(get_current_user)):
-    if format not in ("csv", "netcdf", "parquet"):
-        raise HTTPException(status_code=400, detail="format must be csv | netcdf | parquet")
-    db = get_db()
+# --- Download helpers (kept separate to keep route handler thin) ---
+def _csv_response(res: dict, f107: float, name: str) -> StreamingResponse:
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Doy", "Month", "Lon", "LT", "F10.7", "IBP"])
+    for i, ln in enumerate(res["lons"]):
+        for j, t in enumerate(res["lts"]):
+            w.writerow([res["doy"], res["month"], ln, t, f107, res["matrix"][i][j]])
+    return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename="{name}.csv"'})
+
+
+def _netcdf_response(res: dict, f107: float, name: str, config_hash: str) -> StreamingResponse:
+    import numpy as np
+    import xarray as xr
+    ds = xr.Dataset(
+        data_vars={"ibp": (("lon", "lt"), np.array(res["matrix"]))},
+        coords={"lon": res["lons"], "lt": res["lts"]},
+        attrs={"doy": res["doy"], "month": res["month"], "f107": float(f107),
+               "config_hash": config_hash, "source": ibp_service.MODEL_SOURCE,
+               "generated_at": datetime.now(timezone.utc).isoformat(),
+               "platform": "IBP Analytics Platform"},
+    )
+    tmp = f"/tmp/{name}.nc"
+    ds.to_netcdf(tmp)
+    with open(tmp, "rb") as fh:
+        data = fh.read()
+    os.remove(tmp)
+    return StreamingResponse(iter([data]), media_type="application/x-netcdf",
+                             headers={"Content-Disposition": f'attachment; filename="{name}.nc"'})
+
+
+def _parquet_response(res: dict, f107: float, name: str) -> StreamingResponse:
+    import pandas as pd
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    rows = []
+    for i, ln in enumerate(res["lons"]):
+        for j, t in enumerate(res["lts"]):
+            rows.append({"Doy": res["doy"], "Month": res["month"], "Lon": ln,
+                         "LT": t, "F107": float(f107), "IBP": res["matrix"][i][j]})
+    df = pd.DataFrame(rows)
+    buf = io.BytesIO()
+    pq.write_table(pa.Table.from_pandas(df), buf, compression="snappy")
+    buf.seek(0)
+    return StreamingResponse(iter([buf.getvalue()]), media_type="application/vnd.apache.parquet",
+                             headers={"Content-Disposition": f'attachment; filename="{name}.parquet"'})
+
+
+async def _load_completed_job(db, job_id: str, user: dict) -> dict:
+    """Fetch a job and enforce read-ACL + completed-status, raising HTTPException otherwise."""
     job = await db.ibp_jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -195,51 +210,23 @@ async def download(job_id: str, format: str = "csv", user: dict = Depends(get_cu
         raise HTTPException(status_code=403, detail="Forbidden")
     if job["status"] != "COMPLETED":
         raise HTTPException(status_code=409, detail=f"Job status is {job['status']}")
+    return job
 
-    res = job["result"]; f107 = job["params"]["f107"]
+
+# --- Multi-format download ---
+@router.get("/download/{job_id}")
+async def download(job_id: str, format: str = "csv", user: dict = Depends(get_current_user)):
+    if format not in ("csv", "netcdf", "parquet"):
+        raise HTTPException(status_code=400, detail="format must be csv | netcdf | parquet")
+    job = await _load_completed_job(get_db(), job_id, user)
+    res = job["result"]
+    f107 = job["params"]["f107"]
     name = f"ibp_{job_id[:8]}_hash{job['config_hash']}"
-
     if format == "csv":
-        buf = io.StringIO()
-        w = csv.writer(buf)
-        w.writerow(["Doy", "Month", "Lon", "LT", "F10.7", "IBP"])
-        for i, ln in enumerate(res["lons"]):
-            for j, t in enumerate(res["lts"]):
-                w.writerow([res["doy"], res["month"], ln, t, f107, res["matrix"][i][j]])
-        return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
-                                 headers={"Content-Disposition": f'attachment; filename="{name}.csv"'})
-
+        return _csv_response(res, f107, name)
     if format == "netcdf":
-        import numpy as np, xarray as xr
-        ds = xr.Dataset(
-            data_vars={"ibp": (("lon", "lt"), np.array(res["matrix"]))},
-            coords={"lon": res["lons"], "lt": res["lts"]},
-            attrs={"doy": res["doy"], "month": res["month"], "f107": float(f107),
-                   "config_hash": job["config_hash"], "source": ibp_service.MODEL_SOURCE,
-                   "generated_at": datetime.now(timezone.utc).isoformat(),
-                   "platform": "IBP Analytics Platform"},
-        )
-        tmp = f"/tmp/{name}.nc"
-        ds.to_netcdf(tmp)
-        with open(tmp, "rb") as fh:
-            data = fh.read()
-        os.remove(tmp)
-        return StreamingResponse(iter([data]), media_type="application/x-netcdf",
-                                 headers={"Content-Disposition": f'attachment; filename="{name}.nc"'})
-
-    if format == "parquet":
-        import pandas as pd, pyarrow as pa, pyarrow.parquet as pq
-        rows = []
-        for i, ln in enumerate(res["lons"]):
-            for j, t in enumerate(res["lts"]):
-                rows.append({"Doy": res["doy"], "Month": res["month"], "Lon": ln,
-                             "LT": t, "F107": float(f107), "IBP": res["matrix"][i][j]})
-        df = pd.DataFrame(rows)
-        buf = io.BytesIO()
-        pq.write_table(pa.Table.from_pandas(df), buf, compression="snappy")
-        buf.seek(0)
-        return StreamingResponse(iter([buf.getvalue()]), media_type="application/vnd.apache.parquet",
-                                 headers={"Content-Disposition": f'attachment; filename="{name}.parquet"'})
+        return _netcdf_response(res, f107, name, job["config_hash"])
+    return _parquet_response(res, f107, name)
 
 
 @router.post("/compare")
@@ -248,15 +235,8 @@ async def compare(payload: dict, user: dict = Depends(get_current_user)):
     if not a_id or not b_id:
         raise HTTPException(status_code=400, detail="job_a and job_b required")
     db = get_db()
-    a = await db.ibp_jobs.find_one({"id": a_id}, {"_id": 0})
-    b = await db.ibp_jobs.find_one({"id": b_id}, {"_id": 0})
-    if not a or not b:
-        raise HTTPException(status_code=404, detail="One or both jobs missing")
-    if user["role"] != "admin":
-        if a["user_id"] != user["id"] or b["user_id"] != user["id"]:
-            raise HTTPException(status_code=403, detail="Forbidden")
-    if a["status"] != "COMPLETED" or b["status"] != "COMPLETED":
-        raise HTTPException(status_code=409, detail="Both jobs must be COMPLETED")
+    a = await _load_completed_job(db, a_id, user)
+    b = await _load_completed_job(db, b_id, user)
     if a["result"]["lons"] != b["result"]["lons"] or a["result"]["lts"] != b["result"]["lts"]:
         raise HTTPException(status_code=400, detail="Jobs must share the same lon/lt grid for diff")
     import numpy as np

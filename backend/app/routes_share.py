@@ -13,14 +13,31 @@ from .db import get_db
 router = APIRouter(prefix="/share", tags=["share"])
 
 
-@router.post("/compare")
-async def create_compare_share(payload: dict, user: dict = Depends(get_current_user)):
-    """Create a public share link for an A vs B diff."""
-    job_a = payload.get("job_a"); job_b = payload.get("job_b")
-    title = (payload.get("title") or "Scenario comparison")[:120]
-    if not job_a or not job_b:
-        raise HTTPException(status_code=400, detail="job_a and job_b required")
-    db = get_db()
+def _build_share_payload(a: dict, b: dict) -> dict:
+    """Compose the public-share payload from two completed jobs."""
+    import numpy as np
+    A = np.array(a["result"]["matrix"])
+    B = np.array(b["result"]["matrix"])
+    return {
+        "lons": a["result"]["lons"],
+        "lts": a["result"]["lts"],
+        "matrix_a": a["result"]["matrix"],
+        "matrix_b": b["result"]["matrix"],
+        "diff": (A - B).tolist(),
+        "params_a": a["params"],
+        "params_b": b["params"],
+        "summary_a": a.get("summary"),
+        "summary_b": b.get("summary"),
+        "config_hash_a": a.get("config_hash"),
+        "config_hash_b": b.get("config_hash"),
+        "stats": {
+            "max_abs_diff": float(np.max(np.abs(A - B))),
+            "mean_abs_diff": float(np.mean(np.abs(A - B))),
+        },
+    }
+
+
+async def _load_share_jobs(db, job_a: str, job_b: str, user: dict) -> tuple[dict, dict]:
     a = await db.ibp_jobs.find_one({"id": job_a}, {"_id": 0})
     b = await db.ibp_jobs.find_one({"id": job_b}, {"_id": 0})
     if not a or not b:
@@ -32,10 +49,18 @@ async def create_compare_share(payload: dict, user: dict = Depends(get_current_u
         raise HTTPException(status_code=409, detail="Both jobs must be COMPLETED")
     if a["result"]["lons"] != b["result"]["lons"] or a["result"]["lts"] != b["result"]["lts"]:
         raise HTTPException(status_code=400, detail="Jobs must share the same grid")
+    return a, b
 
-    import numpy as np
-    A = np.array(a["result"]["matrix"])
-    B = np.array(b["result"]["matrix"])
+
+@router.post("/compare")
+async def create_compare_share(payload: dict, user: dict = Depends(get_current_user)):
+    """Create a public share link for an A vs B diff."""
+    job_a = payload.get("job_a"); job_b = payload.get("job_b")
+    title = (payload.get("title") or "Scenario comparison")[:120]
+    if not job_a or not job_b:
+        raise HTTPException(status_code=400, detail="job_a and job_b required")
+    db = get_db()
+    a, b = await _load_share_jobs(db, job_a, job_b, user)
     token = secrets.token_urlsafe(16)
     doc = {
         "id": str(uuid.uuid4()),
@@ -46,23 +71,7 @@ async def create_compare_share(payload: dict, user: dict = Depends(get_current_u
         "kind": "compare",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "view_count": 0,
-        "payload": {
-            "lons": a["result"]["lons"],
-            "lts": a["result"]["lts"],
-            "matrix_a": a["result"]["matrix"],
-            "matrix_b": b["result"]["matrix"],
-            "diff": (A - B).tolist(),
-            "params_a": a["params"],
-            "params_b": b["params"],
-            "summary_a": a.get("summary"),
-            "summary_b": b.get("summary"),
-            "config_hash_a": a.get("config_hash"),
-            "config_hash_b": b.get("config_hash"),
-            "stats": {
-                "max_abs_diff": float(np.max(np.abs(A - B))),
-                "mean_abs_diff": float(np.mean(np.abs(A - B))),
-            },
-        },
+        "payload": _build_share_payload(a, b),
     }
     await db.shares.insert_one(doc.copy())
     return {"id": doc["id"], "token": token, "title": title, "created_at": doc["created_at"]}

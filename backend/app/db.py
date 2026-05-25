@@ -1,8 +1,12 @@
 """Single MongoDB client instance shared across routers."""
+from __future__ import annotations
 import os
+from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorClient
 
-_client: AsyncIOMotorClient | None = None
+# Initialised unconditionally so every code path that references `_client`
+# (with `global _client`) can rely on it being defined.
+_client: Optional[AsyncIOMotorClient] = None
 
 
 def get_client() -> AsyncIOMotorClient:

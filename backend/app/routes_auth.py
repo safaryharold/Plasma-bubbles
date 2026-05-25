@@ -1,14 +1,16 @@
 import uuid
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response
 from .models import RegisterRequest, LoginRequest, UserOut, AuthResponse
 from .auth import hash_password, verify_password, create_access_token, get_current_user
+from .auth_cookies import set_auth_cookie, clear_auth_cookie
 from .db import get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Simple rate limiting (in production, use Redis or proper rate limiter)
-auth_attempts = {}
+auth_attempts: dict = {}
+
 
 def check_rate_limit(email: str):
     now = datetime.now(timezone.utc)
@@ -26,7 +28,7 @@ def check_rate_limit(email: str):
 
 
 @router.post("/register", response_model=AuthResponse)
-async def register(body: RegisterRequest):
+async def register(body: RegisterRequest, response: Response):
     check_rate_limit(body.email)
     db = get_db()
     email = body.email.lower()
@@ -43,13 +45,14 @@ async def register(body: RegisterRequest):
     }
     await db.users.insert_one(user)
     token = create_access_token(user["id"], user["email"], user["role"])
+    set_auth_cookie(response, token)
     user.pop("password_hash", None)
     user.pop("_id", None)
     return {"user": user, "access_token": token, "token_type": "bearer"}
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(body: LoginRequest):
+async def login(body: LoginRequest, response: Response):
     check_rate_limit(body.email)
     db = get_db()
     email = body.email.lower()
@@ -57,6 +60,7 @@ async def login(body: LoginRequest):
     if not user or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token(user["id"], user["email"], user["role"])
+    set_auth_cookie(response, token)
     user.pop("password_hash", None)
     user.pop("_id", None)
     return {"user": user, "access_token": token, "token_type": "bearer"}
@@ -68,5 +72,6 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 @router.post("/logout")
-async def logout(user: dict = Depends(get_current_user)):
+async def logout(response: Response, user: dict = Depends(get_current_user)):
+    clear_auth_cookie(response)
     return {"ok": True}

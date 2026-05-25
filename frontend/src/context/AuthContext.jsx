@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { tokenStore } from "../lib/tokenStore";
 
 const AuthContext = createContext(null);
 
@@ -7,34 +8,42 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // null while checking, object or false
   const [loading, setLoading] = useState(true);
 
+  // Boot: ask the server who we are. The httpOnly cookie travels via
+  // withCredentials; if it's expired or missing we fall through to "logged out".
   useEffect(() => {
-    const token = localStorage.getItem("ibp_token");
-    if (!token) { setUser(false); setLoading(false); return; }
+    if (!tokenStore.isActive()) {
+      // Optimistically still try /auth/me — the cookie might exist from another tab.
+    }
     api.get("/auth/me")
-      .then((r) => setUser(r.data))
-      .catch(() => { localStorage.removeItem("ibp_token"); setUser(false); })
+      .then((r) => { tokenStore.markActive(); setUser(r.data); })
+      .catch(() => { tokenStore.clear(); setUser(false); })
       .finally(() => setLoading(false));
   }, []);
 
-  const signIn = async (email, password) => {
+  const signIn = useCallback(async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
-    localStorage.setItem("ibp_token", data.access_token);
+    tokenStore.markActive();
     setUser(data.user);
     return data.user;
-  };
+  }, []);
 
-  const signUp = async (payload) => {
+  const signUp = useCallback(async (payload) => {
     const { data } = await api.post("/auth/register", payload);
-    localStorage.setItem("ibp_token", data.access_token);
+    tokenStore.markActive();
     setUser(data.user);
     return data.user;
-  };
+  }, []);
 
-  const signOut = async () => {
-    try { await api.post("/auth/logout"); } catch (_) {}
-    localStorage.removeItem("ibp_token");
+  const signOut = useCallback(async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (err) {
+      // Network error or already-expired session — log and continue clearing local state.
+      console.error("Logout request failed:", err);
+    }
+    tokenStore.clear();
     setUser(false);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, setUser, loading, signIn, signUp, signOut }}>

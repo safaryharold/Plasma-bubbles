@@ -57,10 +57,10 @@ export default function Sweep() {
 
   const download = (format = "csv") => {
     if (!job || job.status !== "COMPLETED") return;
-    const token = localStorage.getItem("ibp_token");
     const url = `${process.env.REACT_APP_BACKEND_URL}/api/ibp/download/${job.id}?format=${format}`;
     const ext = { csv: "csv", netcdf: "nc", parquet: "parquet" }[format];
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    // credentials:'include' sends the httpOnly access_token cookie set by /auth/login
+    fetch(url, { credentials: "include" })
       .then(r => r.blob())
       .then(blob => {
         const a = document.createElement("a");

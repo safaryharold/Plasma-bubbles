@@ -44,6 +44,18 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 - [x] **Password policy hardening fix** (`models.py`): replaced pydantic regex pattern with lookahead (rejected by pydantic-core rust regex engine — was crashing the backend on import) with explicit `field_validator` checking lowercase / uppercase / digit / special-char (@$!%*?&) / length. Returns 422 with a precise error message.
 - [x] Infra fix: re-installed `redis-server` binary and restarted Celery worker — `/api/ibp/meta` now reports `compute_backend = celery`.
 
+## Implemented — v1.5 (2026-05-25) — Code-review fixes (security + architecture)
+- [x] **Broke circular import** `celery_app ↔ routes_ibp`: extracted in-process batch runner into new `app/tasks_local.py`. Celery worker and FastAPI BackgroundTasks both consume `tasks_local.run_batch_job`. `routes_ibp._run_batch_job` is a thin shim kept for backwards-compat.
+- [x] **XSS-hardened auth**: backend (`auth_cookies.py`) now sets an `httpOnly; Secure; SameSite=lax; Max-Age=86400` cookie on `/auth/login` and `/auth/register`; `/auth/logout` clears it. Frontend (`lib/tokenStore.js`, `lib/api.js`, `AuthContext.jsx`, `Sweep.jsx`) no longer reads or writes the JWT to `localStorage` — only a non-sensitive `"1"` sentinel in `sessionStorage` (wiped on tab close). Axios uses `withCredentials: true`; `fetch()` for downloads uses `credentials: 'include'`. `Authorization: Bearer …` still works for CLIs/API-key clients.
+- [x] **Reduced cyclomatic complexity** in route handlers:
+  - `routes_ibp.download()` → helpers `_csv_response / _netcdf_response / _parquet_response / _load_completed_job`
+  - `routes_ibp.compare()` → reuses `_load_completed_job`
+  - `routes_share.create_compare_share()` → helpers `_build_share_payload / _load_share_jobs`
+- [x] **Hardcoded test secret** removed: `tests/backend_test.py` reads `TEST_ADMIN_EMAIL` / `TEST_ADMIN_PASSWORD` from env (fallback values kept for local-dev convenience).
+- [x] **AuthContext empty catch** now logs `console.error("Logout request failed:", err)`.
+- [x] **Hook-deps**: `signIn/signUp/signOut` wrapped in `useCallback`; lint clean across all components.
+- [x] Verified: 54/54 backend pytest pass, cookie-based `/auth/me` round-trip works end-to-end, browser confirms `localStorage.ibp_token = null` after login.
+
 ## Implemented — v1.2 (2026-04-24 late evening)
 - [x] **3-D surface plots** (Plotly `type: surface`) replace 2-D heatmaps in /sweep and /compare
 - [x] **Scikit-learn Gaussian-Process smoothing** (`GaussianProcessRegressor` + RBF kernel) upscales sweep grids 2-3× for smooth surfaces

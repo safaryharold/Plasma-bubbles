@@ -3,13 +3,9 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
-export const api = axios.create({ baseURL: API });
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("ibp_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+// withCredentials sends the httpOnly `access_token` cookie set by /auth/login.
+// We no longer read the JWT from localStorage — see lib/tokenStore.js.
+export const api = axios.create({ baseURL: API, withCredentials: true });
 
 export function formatApiError(err) {
   const d = err?.response?.data?.detail;
