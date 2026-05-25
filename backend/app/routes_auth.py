@@ -45,7 +45,8 @@ async def register(body: RegisterRequest, response: Response):
     }
     await db.users.insert_one(user)
     token = create_access_token(user["id"], user["email"], user["role"])
-    set_auth_cookie(response, token)
+    # New researchers get a persistent 7d cookie by default — easier onboarding.
+    set_auth_cookie(response, token, remember=True)
     user.pop("password_hash", None)
     user.pop("_id", None)
     return {"user": user, "access_token": token, "token_type": "bearer"}
@@ -60,7 +61,7 @@ async def login(body: LoginRequest, response: Response):
     if not user or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token(user["id"], user["email"], user["role"])
-    set_auth_cookie(response, token)
+    set_auth_cookie(response, token, remember=bool(body.remember))
     user.pop("password_hash", None)
     user.pop("_id", None)
     return {"user": user, "access_token": token, "token_type": "bearer"}

@@ -39,21 +39,27 @@ async def health():
         db = get_db()
         await db.command("ping")
         db_status = "ok"
-    except Exception:
-        db_status = "error"
+    except Exception as exc:
+        db_status = f"error: {exc.__class__.__name__}"
 
-    # Check Redis if available
+    # Check Redis + Celery worker availability
     try:
-        from app.celery_app import CELERY_READY
+        from app.celery_app import CELERY_READY, queue_stats
         redis_status = "ok" if CELERY_READY else "not configured"
+        celery_workers = queue_stats().get("workers", 0) if CELERY_READY else 0
     except Exception:
         redis_status = "error"
+        celery_workers = 0
 
+    overall = "ok" if db_status == "ok" and (redis_status in ("ok", "not configured")) else "degraded"
     return {
-        "status": "ok" if db_status == "ok" else "degraded",
+        "status": overall,
+        "version": "1.5.0",
         "database": db_status,
         "redis": redis_status,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "celery_workers": celery_workers,
+        "model_source": __import__("app.ibp_service", fromlist=["MODEL_SOURCE"]).MODEL_SOURCE,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 

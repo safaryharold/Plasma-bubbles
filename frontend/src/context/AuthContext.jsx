@@ -20,8 +20,8 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const signIn = useCallback(async (email, password) => {
-    const { data } = await api.post("/auth/login", { email, password });
+  const signIn = useCallback(async (email, password, remember = false) => {
+    const { data } = await api.post("/auth/login", { email, password, remember });
     tokenStore.markActive();
     setUser(data.user);
     return data.user;

@@ -9,6 +9,7 @@ export default function Login() {
   const nav = useNavigate();
   const [email, setEmail] = useState("admin@ibp.dev");
   const [password, setPassword] = useState("admin123");
+  const [remember, setRemember] = useState(true);
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,7 +17,7 @@ export default function Login() {
     e.preventDefault();
     setErr(null); setLoading(true);
     try {
-      await signIn(email, password);
+      await signIn(email, password, remember);
       nav("/dashboard");
     } catch (e2) {
       setErr(formatApiError(e2));
@@ -78,6 +79,23 @@ export default function Login() {
               />
             </div>
             {err && <div className="mono text-xs text-[#FF3333] border border-[#FF3333]/40 bg-[#FF3333]/5 px-3 py-2" data-testid="login-error">{err}</div>}
+
+            <label className="flex items-center gap-3 cursor-pointer select-none group" data-testid="login-remember-row">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                data-testid="login-remember"
+                className="peer sr-only"
+              />
+              <span className="w-4 h-4 border border-[#2A2D35] bg-[#090A0C] peer-checked:bg-[#0047FF] peer-checked:border-[#0047FF] grid place-items-center transition-colors">
+                <span className="w-1.5 h-1.5 bg-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+              </span>
+              <span className="mono text-[10px] uppercase tracking-[0.25em] text-[#8B93A5] group-hover:text-white transition-colors">
+                Remember me for 7 days
+              </span>
+            </label>
+
             <button type="submit" disabled={loading} data-testid="login-submit" className="w-full h-12 bg-[#0047FF] hover:bg-[#336DFF] text-white mono text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
               {loading ? "Authenticating..." : <>Sign in <ArrowRight size={14} /></>}
             </button>
