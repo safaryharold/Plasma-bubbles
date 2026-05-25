@@ -3,17 +3,23 @@
 The world-map demo is the heaviest preview, so we compute it lazily and cache
 the result in-process (single-worker uvicorn) for 1 hour. Subsequent hits
 return the cached JSON instantly without hitting the GP regressor.
+
+NOTE: parameters (day_month / f107 / lon_step / lat_step) are intentionally
+hard-coded so the cache key space is 1 — this also means user input never
+reaches the surrogate via this endpoint, removing the need for `IBP_GRID_CAP`
+guardrails on the public path.
 """
 from __future__ import annotations
+import asyncio
 import time
 import logging
 from fastapi import APIRouter
 from . import ibp_service
+from .version import __version__
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/public", tags=["public-demo"])
 
-# (day_month, f107, lon_step, lat_step) → (expires_at_ts, payload)
 _CACHE: dict = {}
 _TTL_SEC = 60 * 60  # 1 hour
 
@@ -31,22 +37,21 @@ def _cache_put(key, value):
 
 @router.get("/worldmap-demo")
 async def worldmap_demo():
-    """Lightweight preview of the global IBP overlay. No auth, no rate-limit.
-
-    Fixed parameters keep the cache hit-rate high (~100% after first warm-up)
-    and prevent scraping for arbitrary data. Researchers who want custom grids
-    must log in.
-    """
-    day_month = 3   # March equinox — most visually striking
-    f107 = 150.0    # nominal solar flux
+    """Lightweight preview of the global IBP overlay. No auth, no rate-limit."""
+    day_month = 3
+    f107 = 150.0
     lon_step = 20.0
     lat_step = 4.0
     key = (day_month, f107, lon_step, lat_step)
     cached = _cache_get(key)
     if cached:
         return cached
-    payload = ibp_service.worldmap_grid(day_month, f107, lon_step,
-                                        lat_half_range=25.0, lat_step=lat_step)
+    # sklearn GP regressor is CPU-bound; off-load to a thread so the FastAPI
+    # event-loop keeps serving other requests during the ~10s cold-hit warm-up.
+    payload = await asyncio.to_thread(
+        ibp_service.worldmap_grid,
+        day_month, f107, lon_step, 25.0, lat_step,
+    )
     payload["preview"] = True
     payload["caption"] = ("March equinox, F10.7=150 — illustrative preview. "
                           "Sign in to run custom sweeps, exports, and 3D climatologies.")
@@ -56,10 +61,9 @@ async def worldmap_demo():
 
 @router.get("/meta")
 async def public_meta():
-    """Public metadata so the landing page can render the platform footer
-    (model name, version) without an authenticated round-trip."""
+    """Public metadata for the landing footer."""
     return {
         "model_source": ibp_service.MODEL_SOURCE,
         "platform": "IBP Analytics Platform",
-        "version": "1.5.1",
+        "version": __version__,
     }

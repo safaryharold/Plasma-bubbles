@@ -55,7 +55,7 @@ async def health():
     overall = "ok" if db_status == "ok" and (redis_status in ("ok", "not configured")) else "degraded"
     return {
         "status": overall,
-        "version": "1.5.0",
+        "version": __import__("app.version", fromlist=["__version__"]).__version__,
         "database": db_status,
         "redis": redis_status,
         "celery_workers": celery_workers,

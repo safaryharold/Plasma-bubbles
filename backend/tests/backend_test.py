@@ -5,6 +5,7 @@ CSV download, A/B compare, experiments CRUD+clone, API keys, admin, rate-limit
 meta/usage endpoints.
 """
 import os
+import re
 import time
 import uuid
 import pytest
@@ -812,7 +813,7 @@ class TestHealthV15:
         for k in ("status", "version", "database", "redis", "celery_workers",
                   "model_source", "timestamp"):
             assert k in d, f"missing {k} in /api/health: {d}"
-        assert d["version"] == "1.5.0"
+        assert re.match(r"^\d+\.\d+\.\d+", d["version"]), f"version must be semver: {d['version']}"
         assert d["status"] == "ok", f"status should be ok when mongo reachable: {d}"
         assert isinstance(d["celery_workers"], int)
 

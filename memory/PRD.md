@@ -55,15 +55,19 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 - [x] **AuthContext empty catch** now logs `console.error("Logout request failed:", err)`.
 - [x] **Hook-deps**: `signIn/signUp/signOut` wrapped in `useCallback`; lint clean across all components.
 
-## Implemented — v1.5.1 (2026-05-25) — Remember-me + deployment readiness
-- [x] **Remember-me checkbox** on `/login` (default-checked, "Remember me for 7 days"). Backend `LoginRequest.remember: bool = False` → `auth_cookies.set_auth_cookie(response, token, remember=True|False)`. When `remember=True`, cookie carries `Max-Age=604800` (7d); when `remember=False`, no Max-Age → session cookie that dies on browser close. `/auth/register` always uses `remember=True` (smoother onboarding).
-- [x] **Rate-limiter UX fix**: `auth_attempts` counter now only increments on *failed* logins; successful login resets the counter. Prevents lockouts during normal usage.
-- [x] **Enhanced `/api/health`**: now returns `{status, version: '1.5.0', database, redis, celery_workers, model_source, timestamp}` — used by deployment readiness probes.
-- [x] **Deployment cleanup**:
-  - Stripped 20 spurious nvidia/cuda/torch/triton entries from `backend/requirements.txt` (never imported by our code).
-  - Updated `/app/.gitignore` so `backend/.env` + `frontend/.env` are committable (Emergent platform auto-injects production secrets there).
-  - Verified Celery+Redis is optional: when Redis is absent `CELERY_READY=False` and `dispatch_batch` cleanly falls back to FastAPI BackgroundTasks via `tasks_local`. Production deploys without Redis work fine.
-- [x] Verified: **59/59 pytest pass** (54 prior + 5 new for cookie semantics + health). Cookie-based `/auth/me` round-trip works end-to-end via curl AND browser. `localStorage.ibp_token === null` after login. Deployment agent reports `status: warn` (only soft Redis note) — **no blockers**.
+## Implemented — v1.6 (2026-05-25) — Hardening + landing-page conversion widget
+- [x] **Bootstrap admin password rotated** to `AdminSecure1!` (env `ADMIN_PASSWORD`); legacy `admin123` now refused with 401. Startup logger emits a loud WARNING if `ADMIN_PASSWORD` matches a known-weak literal — clear signal to ops to set a strong env var before promoting a build.
+- [x] **Persistent auth rate-limiter**: in-memory dict replaced by MongoDB `auth_attempts` collection with TTL index (`expires_at`, `expireAfterSeconds=0`). Survives restarts, scales across pods. Counter increments only on failed login; successful login deletes the doc. 5 failures within 15 min → 429.
+- [x] **Public landing-demo endpoint** `GET /api/public/worldmap-demo` — no auth, hard-coded params, server-side cached for 1 h, off-loaded to `asyncio.to_thread` so the event loop stays responsive during the ~10s cold-hit warm-up. Plus `GET /api/public/meta` returns `{model_source, platform, version}` for footer rendering.
+- [x] **Landing-page conversion widget** (`components/LandingDemo.jsx`): embedded equirectangular world map with discrete Viridis bands, animated terminator + sun, autoplay loop, slider, band legend, and a **"Run your own sweep" CTA** linking to `/register`. `staticPlot:true` keeps the Plotly canvas crash-free without modebar.
+- [x] **Component refactor** to slay cyclomatic complexity:
+  - New `src/lib/hooks.js` → `useIbpJob`, `useFetch`
+  - New `src/lib/usePlotExports.js` → shared PNG/SVG/300-DPI Paper export hook
+  - New `src/components/PlotToolbar.jsx` → reusable density-selector + export buttons
+  - `Plot.jsx::ContourHeatmap` slimmed to data-binding only; toolbar now external
+  - `Sweep.jsx` split into `SweepHeader / SweepForm / AxisFieldset / SweepResult / EmptyState / RunningState / CompletedResult` sub-components
+- [x] **Build version centralised** in `app/version.py::__version__` (currently `1.6.0`); read by `/api/health` and `/api/public/meta` so they can never drift apart again.
+- [x] Verified: **66/66 backend pytest pass** (+7 new across `TestAdminPasswordRotated`, `TestMongoRateLimit`, `TestPublicLandingEndpoints`); frontend landing page renders the live demo with zero React errors; sweep + worldmap + butterfly regression-clean.
 
 ## Implemented — v1.2 (2026-04-24 late evening)
 - [x] **3-D surface plots** (Plotly `type: surface`) replace 2-D heatmaps in /sweep and /compare
