@@ -37,6 +37,13 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 - [x] Sklearn-smoothed grid still drives the bands so they remain silky-smooth.
 - [x] Rich hover preserved (Lon/LT/IBP/risk classification).
 
+## Implemented — v1.4 (2026-05-25) — Visualization upgrades
+- [x] **World Map overhaul** (`WorldMap.jsx`): 8-band discrete Viridis IBP overlay, animated day/night terminator dotted line (proper great-circle math), gold sun marker at subsolar point, 24-hour UTC slider, requestAnimationFrame play loop with 5-speed selector (0.5×–4×), discrete band legend swatches.
+- [x] **Plot export toolbar** (`Plot.jsx`): contour density selector (coarse / standard / fine / ultra — sizes 0.10 / 0.05 / 0.025 / 0.0125), PNG export, SVG export, and **"Export for Paper" 300 DPI PNG** with auto-caption footer (DOY, F10.7, model source, config hash, "Reference: Rino & Carrano, ibpmodel — IBP Analytics Platform"). Wired meta props from Sweep & Compare.
+- [x] **Butterfly Diagram page** (`/butterfly`): Month × Longitude IBP climatology at fixed LT (default 21:00), backend endpoint `GET /api/ibp/butterfly`, same export toolbar, summary stats + top-8 hotspots panel. New nav entry.
+- [x] **Password policy hardening fix** (`models.py`): replaced pydantic regex pattern with lookahead (rejected by pydantic-core rust regex engine — was crashing the backend on import) with explicit `field_validator` checking lowercase / uppercase / digit / special-char (@$!%*?&) / length. Returns 422 with a precise error message.
+- [x] Infra fix: re-installed `redis-server` binary and restarted Celery worker — `/api/ibp/meta` now reports `compute_backend = celery`.
+
 ## Implemented — v1.2 (2026-04-24 late evening)
 - [x] **3-D surface plots** (Plotly `type: surface`) replace 2-D heatmaps in /sweep and /compare
 - [x] **Scikit-learn Gaussian-Process smoothing** (`GaussianProcessRegressor` + RBF kernel) upscales sweep grids 2-3× for smooth surfaces
