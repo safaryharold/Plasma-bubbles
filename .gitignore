@@ -30,14 +30,13 @@ next-env.d.ts
 dist/
 dist
 
-# Environment files (comprehensive coverage)
-
-.env
-*.env
-backend/.env
-frontend/.env
+# Environment files
+# NOTE: backend/.env and frontend/.env MUST be committed for Emergent deployment
+# (the platform auto-injects production secrets into them on deploy). Only block
+# local-overrides and credential side-files.
 backend/.env.local
 frontend/.env.local
+.env.local
 *token.json*
 *credentials.json*
 
