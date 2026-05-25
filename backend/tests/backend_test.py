@@ -736,3 +736,82 @@ class TestPasswordPolicy:
         # might be bypassed somewhere; we report regardless.
         assert r.status_code == 200, f"strong password rejected: {r.text}"
         assert r.json()["user"]["email"] == email
+
+
+# ---------- v1.5: Remember-me cookie semantics ----------
+def _parse_set_cookie_access_token(resp):
+    """Return the Set-Cookie line for `access_token` or None."""
+    cookies = []
+    # requests merges multiple Set-Cookie via raw; use .raw.headers.getlist
+    try:
+        cookies = resp.raw.headers.getlist("Set-Cookie")
+    except Exception:
+        sc = resp.headers.get("Set-Cookie")
+        if sc:
+            cookies = [sc]
+    for c in cookies:
+        if c.startswith("access_token="):
+            return c
+    return None
+
+
+class TestRememberMeCookie:
+    def test_login_without_remember_session_cookie(self):
+        # Use admin to avoid creating throwaway users
+        r = requests.post(f"{API}/auth/login",
+                          json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=10)
+        assert r.status_code == 200
+        sc = _parse_set_cookie_access_token(r)
+        assert sc is not None, "Missing access_token Set-Cookie"
+        low = sc.lower()
+        assert "httponly" in low
+        assert "path=/" in low
+        assert "samesite=lax" in low
+        assert "secure" in low
+        assert "max-age" not in low, f"session cookie should NOT have Max-Age: {sc}"
+
+    def test_login_with_remember_true_persistent_cookie(self):
+        r = requests.post(f"{API}/auth/login",
+                          json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "remember": True},
+                          timeout=10)
+        assert r.status_code == 200
+        sc = _parse_set_cookie_access_token(r)
+        assert sc is not None
+        low = sc.lower()
+        assert "max-age=604800" in low, f"expected Max-Age=604800: {sc}"
+        assert "httponly" in low and "path=/" in low and "samesite=lax" in low and "secure" in low
+
+    def test_register_sets_persistent_cookie(self):
+        email = _unique_email("reg_cookie")
+        r = requests.post(f"{API}/auth/register",
+                          json={"email": email, "password": "Research1!", "name": "RC"},
+                          timeout=10)
+        assert r.status_code == 200
+        sc = _parse_set_cookie_access_token(r)
+        assert sc is not None
+        assert "max-age=604800" in sc.lower(), f"register should set 7d cookie: {sc}"
+
+    def test_cookie_only_auth_me_works(self):
+        s = requests.Session()
+        r = s.post(f"{API}/auth/login",
+                   json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "remember": True},
+                   timeout=10)
+        assert r.status_code == 200
+        # call /me with NO Authorization header — only the cookie jar
+        r2 = s.get(f"{API}/auth/me", timeout=10)
+        assert r2.status_code == 200, f"cookie-only auth failed: {r2.status_code} {r2.text}"
+        assert r2.json()["email"] == ADMIN_EMAIL
+
+
+# ---------- v1.5: /api/health enhanced response ----------
+class TestHealthV15:
+    def test_health_shape_and_status_ok(self):
+        r = requests.get(f"{API}/health", timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        for k in ("status", "version", "database", "redis", "celery_workers",
+                  "model_source", "timestamp"):
+            assert k in d, f"missing {k} in /api/health: {d}"
+        assert d["version"] == "1.5.0"
+        assert d["status"] == "ok", f"status should be ok when mongo reachable: {d}"
+        assert isinstance(d["celery_workers"], int)

@@ -1,0 +1,40 @@
+{
+  "summary": "v1.5 validated end-to-end. Full pytest suite 59/59 PASS (54 prior + 5 new Remember-me/Health/cookie-only tests). All v1.5 deliverables verified: (1) Login page has data-testid login-remember (default-checked) + login-remember-row, label 'Remember me for 7 days' visible, toggleable. (2) POST /api/auth/login without remember -> Set-Cookie access_token with HttpOnly; Path=/; SameSite=lax; Secure and NO Max-Age (session cookie). (3) POST /api/auth/login with remember:true -> same flags + Max-Age=604800 (7 days). (4) POST /api/auth/register -> persistent 7d cookie automatically. (5) GET /api/health returns 200 with {status:'ok', version:'1.5.0', database:'ok', redis:'ok', celery_workers:1, model_source:'ibpmodel-2.x', timestamp}. (6) Cookie-only flow: curl -c jar /login then -b jar /auth/me returns 200 with NO Authorization header. (7) Legacy Bearer auth still works - all 54 prior Bearer-based tests still pass (no regression). (8) Logout clears cookie via Set-Cookie: access_token=\"\"; Max-Age=0 and subsequent /auth/me returns 401 (verified via curl). (9) Pre-existing v1.4 (WorldMap/Butterfly/Exports) - quick FE nav smoke passed. Celery worker is up this run (1 worker active) so previously-failing TestMetaCelery + TestBatchCelery now also PASS - that fixes the iteration_4 regression too.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/login + /register", "issue": "Login rate-limit (5 attempts/15min per email) is shared between successful and failed attempts. Successful logins also count towards the limit, which made admin login 429 after ~5 testing rounds. Consider only counting failed attempts towards the lockout, or whitelisting admin during development."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional, minor) Don't increment the rate-limit counter on successful logins - only on failed attempts - to avoid lockouts during normal testing/usage."
+  ],
+  "critical_code_review_comments": [
+    "auth_cookies.py cleanly implements session-vs-persistent cookie semantics: when remember=False, Max-Age key is omitted from set_cookie kwargs so Starlette emits no Max-Age (verified live via curl - no Max-Age in response). When remember=True, Max-Age=604800 is emitted. COOKIE_SECURE + COOKIE_SAMESITE are env-configurable - good for production.",
+    "routes_auth.py login() correctly passes remember=bool(body.remember); register() always passes remember=True for new-user onboarding - this is a UX tradeoff (new researchers stay logged-in for 7d). Documented in the code comment.",
+    "models.py LoginRequest.remember defaults to False - backwards compatible: any legacy client (or the entire pytest suite that omits the field) still gets the safer session-cookie behavior automatically.",
+    "Backend continues to also return access_token in the JSON body, so curl/CLI/CI clients using Authorization: Bearer ... still work - no regression in the 54 prior Bearer-based tests.",
+    "/api/health enhanced response (version=1.5.0, celery_workers, model_source) is additive only - older callers reading {status, database, redis, timestamp} still find those keys unchanged.",
+    "Login.jsx Remember-me uses peer-checked Tailwind pattern with a hidden native checkbox - accessible (still keyboard-toggleable) and visually consistent with the platform's monochrome aesthetic.",
+    "auth_cookies.clear_auth_cookie correctly emits Set-Cookie: access_token=\"\"; Max-Age=0; Path=/; SameSite=lax on logout (verified) - browsers will delete the cookie immediately."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added TestRememberMeCookie - 4 tests, TestHealthV15 - 1 test, plus _parse_set_cookie_access_token helper)"
+  ],
+  "success_rate": {"backend": "100% (59/59 pytest pass)", "frontend": "100% Login page testids verified + login + cookie + sessionStorage sentinel + nav smoke OK"},
+  "test_credentials": "Admin admin@ibp.dev / admin123 - WORKING (rate-limit was hit during testing; resolved by using freshly-registered users for logout verification). Strong-password fresh users registered with Research1!",
+  "seed_data_creation": "TEST_-prefixed jobs/experiments/keys/shares + throwaway researchers (test_*@ibp.dev) created during pytest. No production data modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "v1.5 is fully validated. The full pytest suite is 59 tests (TestRememberMeCookie + TestHealthV15 are new). The /api/auth/login + /register rate-limit (5 attempts / 15 min per email) counts successful attempts too - if you hit 429 during testing, either wait 15 min or register a fresh researcher and use that. Celery worker is currently up (compute_backend='celery', 1 worker) - if it goes down again, TestMetaCelery + TestBatchCelery will fail (pre-existing infra dependency). Backend URL: https://space-weather-hub-1.preview.emergentagent.com.",
+  "rca of the issue": "No v1.5 defects. The single minor observation is that the auth rate-limiter at /app/backend/app/routes_auth.py::check_rate_limit() counts successful logins toward the 5/15min limit, which can cause development friction. Fix is trivial: only increment auth_attempts on failed verify_password() (move the counter increment into the 401 branch, or reset on success)."
+}
