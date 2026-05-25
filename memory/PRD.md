@@ -46,7 +46,7 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 
 ## Implemented — v1.5 (2026-05-25) — Code-review fixes (security + architecture)
 - [x] **Broke circular import** `celery_app ↔ routes_ibp`: extracted in-process batch runner into new `app/tasks_local.py`. Celery worker and FastAPI BackgroundTasks both consume `tasks_local.run_batch_job`. `routes_ibp._run_batch_job` is a thin shim kept for backwards-compat.
-- [x] **XSS-hardened auth**: backend (`auth_cookies.py`) now sets an `httpOnly; Secure; SameSite=lax; Max-Age=86400` cookie on `/auth/login` and `/auth/register`; `/auth/logout` clears it. Frontend (`lib/tokenStore.js`, `lib/api.js`, `AuthContext.jsx`, `Sweep.jsx`) no longer reads or writes the JWT to `localStorage` — only a non-sensitive `"1"` sentinel in `sessionStorage` (wiped on tab close). Axios uses `withCredentials: true`; `fetch()` for downloads uses `credentials: 'include'`. `Authorization: Bearer …` still works for CLIs/API-key clients.
+- [x] **XSS-hardened auth**: backend (`auth_cookies.py`) now sets an `httpOnly; Secure; SameSite=lax` cookie on `/auth/login` and `/auth/register`; `/auth/logout` clears it. Frontend (`lib/tokenStore.js`, `lib/api.js`, `AuthContext.jsx`, `Sweep.jsx`) no longer reads or writes the JWT to `localStorage` — only a non-sensitive `"1"` sentinel in `sessionStorage` (wiped on tab close). Axios uses `withCredentials: true`; `fetch()` for downloads uses `credentials: 'include'`. `Authorization: Bearer …` still works for CLIs/API-key clients.
 - [x] **Reduced cyclomatic complexity** in route handlers:
   - `routes_ibp.download()` → helpers `_csv_response / _netcdf_response / _parquet_response / _load_completed_job`
   - `routes_ibp.compare()` → reuses `_load_completed_job`
@@ -54,7 +54,16 @@ operators, GNSS/telecom engineers, aviation stakeholders.
 - [x] **Hardcoded test secret** removed: `tests/backend_test.py` reads `TEST_ADMIN_EMAIL` / `TEST_ADMIN_PASSWORD` from env (fallback values kept for local-dev convenience).
 - [x] **AuthContext empty catch** now logs `console.error("Logout request failed:", err)`.
 - [x] **Hook-deps**: `signIn/signUp/signOut` wrapped in `useCallback`; lint clean across all components.
-- [x] Verified: 54/54 backend pytest pass, cookie-based `/auth/me` round-trip works end-to-end, browser confirms `localStorage.ibp_token = null` after login.
+
+## Implemented — v1.5.1 (2026-05-25) — Remember-me + deployment readiness
+- [x] **Remember-me checkbox** on `/login` (default-checked, "Remember me for 7 days"). Backend `LoginRequest.remember: bool = False` → `auth_cookies.set_auth_cookie(response, token, remember=True|False)`. When `remember=True`, cookie carries `Max-Age=604800` (7d); when `remember=False`, no Max-Age → session cookie that dies on browser close. `/auth/register` always uses `remember=True` (smoother onboarding).
+- [x] **Rate-limiter UX fix**: `auth_attempts` counter now only increments on *failed* logins; successful login resets the counter. Prevents lockouts during normal usage.
+- [x] **Enhanced `/api/health`**: now returns `{status, version: '1.5.0', database, redis, celery_workers, model_source, timestamp}` — used by deployment readiness probes.
+- [x] **Deployment cleanup**:
+  - Stripped 20 spurious nvidia/cuda/torch/triton entries from `backend/requirements.txt` (never imported by our code).
+  - Updated `/app/.gitignore` so `backend/.env` + `frontend/.env` are committable (Emergent platform auto-injects production secrets there).
+  - Verified Celery+Redis is optional: when Redis is absent `CELERY_READY=False` and `dispatch_batch` cleanly falls back to FastAPI BackgroundTasks via `tasks_local`. Production deploys without Redis work fine.
+- [x] Verified: **59/59 pytest pass** (54 prior + 5 new for cookie semantics + health). Cookie-based `/auth/me` round-trip works end-to-end via curl AND browser. `localStorage.ibp_token === null` after login. Deployment agent reports `status: warn` (only soft Redis note) — **no blockers**.
 
 ## Implemented — v1.2 (2026-04-24 late evening)
 - [x] **3-D surface plots** (Plotly `type: surface`) replace 2-D heatmaps in /sweep and /compare

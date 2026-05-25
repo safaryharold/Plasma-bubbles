@@ -13,6 +13,7 @@ auth_attempts: dict = {}
 
 
 def check_rate_limit(email: str):
+    """Raise 429 if a given email has failed auth >=5 times in the last 15 min."""
     now = datetime.now(timezone.utc)
     key = email.lower()
     if key in auth_attempts:
@@ -20,11 +21,21 @@ def check_rate_limit(email: str):
         if now - last_attempt < timedelta(minutes=15) and attempts >= 5:
             raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
         if now - last_attempt > timedelta(minutes=15):
-            auth_attempts[key] = (1, now)
-        else:
-            auth_attempts[key] = (attempts + 1, now)
-    else:
-        auth_attempts[key] = (1, now)
+            # Stale lockout window — start fresh.
+            auth_attempts.pop(key, None)
+
+
+def record_failed_attempt(email: str) -> None:
+    """Bump the per-email failed-attempt counter (call only on auth failure)."""
+    now = datetime.now(timezone.utc)
+    key = email.lower()
+    attempts, _ = auth_attempts.get(key, (0, now))
+    auth_attempts[key] = (attempts + 1, now)
+
+
+def clear_attempts(email: str) -> None:
+    """Reset the lockout counter on a successful login."""
+    auth_attempts.pop(email.lower(), None)
 
 
 @router.post("/register", response_model=AuthResponse)
@@ -59,7 +70,9 @@ async def login(body: LoginRequest, response: Response):
     email = body.email.lower()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user["password_hash"]):
+        record_failed_attempt(body.email)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    clear_attempts(body.email)
     token = create_access_token(user["id"], user["email"], user["role"])
     set_auth_cookie(response, token, remember=bool(body.remember))
     user.pop("password_hash", None)
