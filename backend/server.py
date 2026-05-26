@@ -22,34 +22,8 @@ from app.routes_admin import router as admin_router  # noqa: E402
 from app.routes_share import router as share_router, public_router  # noqa: E402
 from app.routes_public import router as public_demo_router  # noqa: E402
 from app.routes_ws import router as ws_router  # noqa: E402
-<<<<<<< HEAD
-from app.routes_webhook import router as webhook_router  # noqa: E402
-"""IBP Analytics Platform — FastAPI entrypoint."""
-from pathlib import Path
-from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent / ".env")
-
-import os
-import logging
-from datetime import datetime, timezone
-from fastapi import FastAPI, APIRouter
-from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.gzip import GZipMiddleware
-
-from app.db import get_db, get_client
-from app.auth import seed_admin
-from app.middleware import LoggingMiddleware
-from app.middleware_logging import RequestLoggingMiddleware
-from app.routes_auth import router as auth_router
-from app.routes_ibp import router as ibp_router
-from app.routes_experiments import router as exp_router
-from app.routes_keys import router as keys_router
-from app.routes_admin import router as admin_router
-from app.routes_share import router as share_router, public_router
-from app.routes_public import router as public_demo_router
-from app.routes_ws import router as ws_router
-from app.routes_webhooks import router as webhooks_router
-from app.routes_monitoring import router as monitoring_router
+from app.routes_webhooks import router as webhooks_router  # noqa: E402
+from app.routes_monitoring import router as monitoring_router  # noqa: E402
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
