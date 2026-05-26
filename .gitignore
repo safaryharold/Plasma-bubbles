@@ -30,13 +30,16 @@ next-env.d.ts
 dist/
 dist
 
-# Environment files
-# NOTE: backend/.env and frontend/.env MUST be committed for Emergent deployment
-# (the platform auto-injects production secrets into them on deploy). Only block
-# local-overrides and credential side-files.
-backend/.env.local
-frontend/.env.local
+# Environment files - NEVER commit .env files with secrets
+.env
 .env.local
+.env.production
+backend/.env
+backend/.env.local
+backend/.env.production
+frontend/.env
+frontend/.env.local
+frontend/.env.production
 *token.json*
 *credentials.json*
 
