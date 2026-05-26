@@ -72,3 +72,15 @@ async def jobs_ws(
         logger.info("WS closed for user=%s", user["id"])
     finally:
         manager.disconnect(websocket, user["id"])
+
+
+async def broadcast_job_update(user_id: str, job_id: str, status: str, summary: dict = None):
+    """Helper used by workers/tasks — broadcast job update to connected clients."""
+    try:
+        # Read latest job doc (omit bulky result payload)
+        db = get_db()
+        job = await db.ibp_jobs.find_one({"id": job_id}, {"_id": 0, "result": 0})
+        if job:
+            await manager.broadcast_job(user_id, job)
+    except Exception as exc:
+        logger.debug("broadcast_job_update skipped: %s", exc)

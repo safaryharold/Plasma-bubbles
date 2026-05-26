@@ -83,6 +83,20 @@ async def batch(body: IBPBatchRequest, background: BackgroundTasks, user: dict =
         "summary": None, "worker": None, "task_id": None,
     }
     db = get_db()
+    # Result cache: if this user already ran the *exact* same config and it
+    # completed, clone the cached result instead of recomputing.
+    cached = await db.ibp_jobs.find_one(
+        {"user_id": user["id"], "config_hash": job["config_hash"], "status": "COMPLETED"},
+        {"_id": 0, "result": 1, "summary": 1},
+    )
+    if cached:
+        job["status"] = "COMPLETED"
+        job["worker"] = "cache"
+        job["started_at"] = job["completed_at"] = job["created_at"]
+        job["summary"] = cached.get("summary")
+        await db.ibp_jobs.insert_one({**job, "result": cached.get("result")})
+        job.pop("_id", None)
+        return job
     await db.ibp_jobs.insert_one(job.copy())
     worker = dispatch_batch(job["id"], params, background_tasks=background)
     await db.ibp_jobs.update_one({"id": job["id"]}, {"$set": {"worker": worker}})
@@ -252,6 +266,41 @@ async def compare(payload: dict, user: dict = Depends(get_current_user)):
     }
 
 
+@router.post("/compare-multi")
+async def compare_multi(payload: dict, user: dict = Depends(get_current_user)):
+    """N-way comparison across 2-6 job IDs. Returns aligned matrices + pairwise stats."""
+    ids = payload.get("job_ids") or []
+    if not (2 <= len(ids) <= 6):
+        raise HTTPException(status_code=400, detail="job_ids must contain 2 to 6 ids")
+    db = get_db()
+    jobs = []
+    for jid in ids:
+        jobs.append(await _load_completed_job(db, jid, user))
+    base = jobs[0]["result"]
+    for j in jobs[1:]:
+        if j["result"]["lons"] != base["lons"] or j["result"]["lts"] != base["lts"]:
+            raise HTTPException(status_code=400, detail="All jobs must share the same lon/lt grid")
+    import numpy as np
+    mats = [np.array(j["result"]["matrix"]) for j in jobs]
+    pair_stats = []
+    for i in range(len(mats)):
+        for k in range(i + 1, len(mats)):
+            d = mats[i] - mats[k]
+            pair_stats.append({
+                "a": ids[i], "b": ids[k],
+                "max_abs_diff": float(np.max(np.abs(d))),
+                "mean_abs_diff": float(np.mean(np.abs(d))),
+            })
+    return {
+        "lons": base["lons"], "lts": base["lts"],
+        "jobs": [{"id": ids[i], "params": jobs[i]["params"],
+                  "matrix": jobs[i]["result"]["matrix"],
+                  "summary": jobs[i]["summary"],
+                  "config_hash": jobs[i].get("config_hash")} for i in range(len(jobs))],
+        "pair_stats": pair_stats,
+    }
+
+
 @router.get("/usage")
 async def usage(user: dict = Depends(get_current_user)):
     return rate_limit.usage(user)
@@ -297,4 +346,53 @@ async def butterfly(lt: float = 21.0, f107: float = 150.0, lon_step: float = 5.0
     result = ibp_service.butterfly_grid(lt=lt, f107=f107, lon_step=lon_step)
     await cache_set(key, result)
     return result
+
+
+    # --- Batch result comparison ---
+    @router.post("/compare")
+    async def compare_jobs(job_ids: list[str], user: dict = Depends(get_current_user)):
+        """Compare results from multiple batch jobs."""
+        if not job_ids or len(job_ids) > 5:
+            raise HTTPException(status_code=400, detail="Provide 1-5 job IDs")
+
+        db = get_db()
+        jobs = []
+
+        for job_id in job_ids:
+            job = await db.ibp_jobs.find_one({"id": job_id}, {"_id": 0})
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+            if user["role"] != "admin" and job["user_id"] != user["id"]:
+                raise HTTPException(status_code=403, detail=f"Access denied to job {job_id}")
+            if job["status"] != "COMPLETED":
+                raise HTTPException(status_code=400, detail=f"Job {job_id} not completed")
+            jobs.append(job)
+
+        comparison = {
+            "job_ids": job_ids,
+            "count": len(jobs),
+            "jobs": [
+                {
+                    "id": j["id"],
+                    "name": j.get("name"),
+                    "params": j["params"],
+                    "summary": j.get("summary"),
+                    "created_at": j.get("created_at"),
+                }
+                for j in jobs
+            ],
+            "statistics": {
+                "ibp_ranges": [
+                    {
+                        "job_id": j["id"],
+                        "min": j["summary"]["ibp_min"],
+                        "max": j["summary"]["ibp_max"],
+                        "mean": j["summary"]["ibp_mean"],
+                        "p95": j["summary"]["ibp_p95"],
+                    }
+                    for j in jobs
+                ]
+            }
+        }
+        return comparison
 

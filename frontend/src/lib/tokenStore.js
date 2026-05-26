@@ -30,4 +30,18 @@ export const tokenStore = {
     // One-time migration: purge legacy localStorage token from older builds.
     try { localStorage.removeItem("ibp_token"); } catch (_) { /* noop */ }
   },
+  /** Check if token should be refreshed */
+  shouldRefresh() {
+    const lastRefresh = sessionStorage.getItem("ibp_last_refresh");
+    if (!lastRefresh) return true;
+    // Refresh if more than 30 minutes since last refresh
+    const now = Date.now();
+    const timeSinceRefresh = now - parseInt(lastRefresh, 10);
+    return timeSinceRefresh > 30 * 60 * 1000;
+  },
+
+  /** Mark token as refreshed */
+  markRefreshed() {
+    try { sessionStorage.setItem("ibp_last_refresh", Date.now().toString()); } catch (_) { /* noop */ }
+  },
 };

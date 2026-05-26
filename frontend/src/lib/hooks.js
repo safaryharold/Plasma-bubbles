@@ -9,8 +9,9 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { api, formatApiError } from "./api";
+import { useJobStatus } from "./useJobStatus";
 
-export function useIbpJob() {
+export function useIbpJob(currentUser = null) {
   const [job, setJob] = useState(null);
   const [viz, setViz] = useState(null);
   const [err, setErr] = useState(null);
@@ -20,6 +21,11 @@ export function useIbpJob() {
     try {
       const { data } = await api.post("/ibp/batch", form);
       setJob(data);
+      // Cache-hit: backend returned COMPLETED synchronously
+      if (data.status === "COMPLETED") {
+        const { data: v } = await api.get(`/ibp/visualization-data/${data.id}`);
+        setViz(v);
+      }
     } catch (e) { setErr(formatApiError(e)); }
   }, []);
 
@@ -35,9 +41,18 @@ export function useIbpJob() {
     } catch (e) { setErr(formatApiError(e)); }
   }, [job]);
 
+  // Real-time WebSocket — fires `poll` the instant the worker emits a
+  // COMPLETED/FAILED broadcast, eliminating the polling lag.
+  useJobStatus({
+    userId: currentUser?.id,
+    jobId: job?.id,
+    onUpdate: poll,
+  });
+
+  // Polling fallback — works even without WebSocket.
   useEffect(() => {
     if (!job || job.status === "COMPLETED" || job.status === "FAILED") return;
-    const id = setInterval(poll, 1200);
+    const id = setInterval(poll, 2000);
     return () => clearInterval(id);
   }, [job, poll]);
 

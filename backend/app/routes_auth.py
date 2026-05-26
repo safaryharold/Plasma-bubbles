@@ -1,11 +1,18 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends, Response, Cookie
+from fastapi import APIRouter, HTTPException, Depends, Response
 from .models import RegisterRequest, LoginRequest, UserOut, AuthResponse
+<<<<<<< HEAD
 from .auth import (
     hash_password, verify_password, create_access_token,
     create_refresh_token, decode_refresh_token, get_current_user,
 )
+=======
+from .auth import (
+    hash_password, verify_password, create_access_token,
+    create_refresh_token, get_current_user, get_current_refresh_user,
+)
+>>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
 from .auth_cookies import set_auth_cookie, set_refresh_cookie, clear_auth_cookie
 from .auth_rate_limit import check_rate_limit, record_failed_attempt, clear_attempts
 from .db import get_db
@@ -30,13 +37,20 @@ async def register(body: RegisterRequest, response: Response):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(user)
+<<<<<<< HEAD
     token = create_access_token(user["id"], user["email"], user["role"])
     refresh = create_refresh_token(user["id"])
     set_auth_cookie(response, token, remember=True)
     set_refresh_cookie(response, refresh)
+=======
+    access_token = create_access_token(user["id"], user["email"], user["role"])
+    refresh_token = create_refresh_token(user["id"])
+    set_auth_cookie(response, access_token, remember=True)
+    set_refresh_cookie(response, refresh_token, remember=True)
+>>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
     user.pop("password_hash", None)
     user.pop("_id", None)
-    return {"user": user, "access_token": token, "token_type": "bearer"}
+    return {"user": user, "access_token": access_token, "token_type": "bearer"}
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -49,31 +63,24 @@ async def login(body: LoginRequest, response: Response):
         await record_failed_attempt(body.email)
         raise HTTPException(status_code=401, detail="Invalid credentials")
     await clear_attempts(body.email)
+<<<<<<< HEAD
     token = create_access_token(user["id"], user["email"], user["role"])
     refresh = create_refresh_token(user["id"])
     set_auth_cookie(response, token, remember=bool(body.remember))
     set_refresh_cookie(response, refresh)
+=======
+    access_token = create_access_token(user["id"], user["email"], user["role"])
+    refresh_token = create_refresh_token(user["id"])
+    set_auth_cookie(response, access_token, remember=bool(body.remember))
+    set_refresh_cookie(response, refresh_token, remember=bool(body.remember))
+>>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
     user.pop("password_hash", None)
     user.pop("_id", None)
-    return {"user": user, "access_token": token, "token_type": "bearer"}
+    return {"user": user, "access_token": access_token, "token_type": "bearer"}
 
 
-@router.post("/refresh")
-async def refresh_token(
-    response: Response,
-    refresh_token: str | None = Cookie(default=None),
-):
-    """Issue a new access token using a valid refresh token cookie."""
-    if not refresh_token:
-        raise HTTPException(status_code=401, detail="No refresh token")
-    payload = decode_refresh_token(refresh_token)
-    db = get_db()
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    new_token = create_access_token(user["id"], user["email"], user["role"])
-    set_auth_cookie(response, new_token, remember=True)
-    return {"access_token": new_token, "token_type": "bearer"}
+# NOTE: refresh by cookie is handled by the dependency `get_current_refresh_user`
+# below (avoids duplicate routes and centralises refresh validation).
 
 
 @router.get("/me", response_model=UserOut)
@@ -85,3 +92,14 @@ async def me(user: dict = Depends(get_current_user)):
 async def logout(response: Response, user: dict = Depends(get_current_user)):
     clear_auth_cookie(response)
     return {"ok": True}
+
+
+@router.post("/refresh", response_model=AuthResponse)
+async def refresh(response: Response, user: dict = Depends(get_current_refresh_user)):
+    """Issue a fresh access + refresh token pair when the refresh cookie is valid."""
+    access_token = create_access_token(user["id"], user["email"], user["role"])
+    refresh_token = create_refresh_token(user["id"])
+    set_auth_cookie(response, access_token, remember=True)
+    set_refresh_cookie(response, refresh_token, remember=True)
+    safe = {k: v for k, v in user.items() if k not in ("password_hash", "_id")}
+    return {"user": safe, "access_token": access_token, "token_type": "bearer"}

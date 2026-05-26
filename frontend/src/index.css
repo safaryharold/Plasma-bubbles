@@ -28,10 +28,32 @@
 }
 
 html, body, #root {
-  background: #090A0C;
-  color: #FFFFFF;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
   font-family: 'Chivo', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+html.light {
+  --background: 0 0% 100%;
+  --foreground: 222 20% 8%;
+  --card: 210 16% 97%;
+  --card-foreground: 222 20% 8%;
+  --popover: 210 16% 96%;
+  --popover-foreground: 222 20% 8%;
+  --primary: 222 91% 41%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 14% 92%;
+  --secondary-foreground: 222 20% 8%;
+  --muted: 210 16% 94%;
+  --muted-foreground: 215 13% 44%;
+  --accent: 222 56% 88%;
+  --accent-foreground: 222 20% 8%;
+  --destructive: 358 79% 62%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 210 14% 85%;
+  --input: 0 0% 96%;
+  --ring: 222 100% 50%;
 }
 
 body {

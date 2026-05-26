@@ -8,8 +8,6 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import { PageLoader } from "./components/Skeleton";
 import { Toaster } from "sonner";
-
-// Eagerly loaded (critical path)
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";

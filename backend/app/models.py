@@ -112,6 +112,21 @@ class ExperimentOut(BaseModel):
     created_at: str
 
 
+class ExportPresetCreate(BaseModel):
+    format: str = Field(..., regex="^(csv|netcdf|parquet)$", description="Export format must be csv, netcdf, or parquet")
+    settings: dict
+
+
+class ExportPresetOut(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    exp_id: str
+    user_id: str
+    format: str
+    settings: dict
+    created_at: str
+
+
 # ---------- API Keys ----------
 class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)

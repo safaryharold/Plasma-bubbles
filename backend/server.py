@@ -13,6 +13,7 @@ from starlette.middleware.gzip import GZipMiddleware  # noqa: E402
 
 from app.db import get_db, get_client  # noqa: E402
 from app.auth import seed_admin  # noqa: E402
+from app.middleware import LoggingMiddleware  # noqa: E402
 from app.routes_auth import router as auth_router  # noqa: E402
 from app.routes_ibp import router as ibp_router  # noqa: E402
 from app.routes_experiments import router as exp_router  # noqa: E402
@@ -21,9 +22,35 @@ from app.routes_admin import router as admin_router  # noqa: E402
 from app.routes_share import router as share_router, public_router  # noqa: E402
 from app.routes_public import router as public_demo_router  # noqa: E402
 from app.routes_ws import router as ws_router  # noqa: E402
+<<<<<<< HEAD
 from app.routes_webhook import router as webhook_router  # noqa: E402
-from app.middleware_logging import RequestLoggingMiddleware  # noqa: E402
-from app.routes_monitoring import router as monitoring_router  # noqa: E402
+"""IBP Analytics Platform — FastAPI entrypoint."""
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
+
+import os
+import logging
+from datetime import datetime, timezone
+from fastapi import FastAPI, APIRouter
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
+
+from app.db import get_db, get_client
+from app.auth import seed_admin
+from app.middleware import LoggingMiddleware
+from app.middleware_logging import RequestLoggingMiddleware
+from app.routes_auth import router as auth_router
+from app.routes_ibp import router as ibp_router
+from app.routes_experiments import router as exp_router
+from app.routes_keys import router as keys_router
+from app.routes_admin import router as admin_router
+from app.routes_share import router as share_router, public_router
+from app.routes_public import router as public_demo_router
+from app.routes_ws import router as ws_router
+from app.routes_webhooks import router as webhooks_router
+from app.routes_monitoring import router as monitoring_router
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
 logger = logging.getLogger("ibp")
@@ -31,46 +58,17 @@ logger = logging.getLogger("ibp")
 app = FastAPI(
     title="IBP Analytics Platform",
     version="1.1.0",
-    description="""
-## IBP Analytics Platform API
-
-Scientific & commercial platform for **Ionospheric Bubble Probability (IBP)** modelling.
-
-### Authentication
-Most endpoints require a valid session cookie (`access_token`) or `x-api-key` header.
-- **POST /api/auth/login** — obtain session cookie
-- **POST /api/auth/refresh** — silently refresh an expired access token using the `refresh_token` cookie
-- **POST /api/auth/logout** — clear session
-
-### Rate Limits
-| Role       | Per-minute | Per-day |
-|------------|-----------|---------|
-| researcher | 10        | 100     |
-| pro        | 60        | 2 000   |
-| admin      | unlimited | unlimited |
-
-### Real-time Updates
-Connect to `WS /api/ws/jobs` for live job-status push events (no polling needed).
-
-### Webhooks
-Register a callback URL via `POST /api/webhooks` to receive HTTP notifications when jobs complete.
-""",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    description=(
+        "Scientific & commercial platform for Ionospheric Bubble Probability (IBP) modelling.\n"
+        "Most endpoints require a valid session cookie (access_token) or x-api-key header."
+    ),
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
 )
 
-# ── Middleware (order matters: outer = first to process request) ───────────────
-app.add_middleware(GZipMiddleware, minimum_size=1000)   # gzip responses > 1 KB
-app.add_middleware(RequestLoggingMiddleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
+# Mount API router
 api = APIRouter(prefix="/api")
 
 
@@ -108,6 +106,7 @@ async def health():
     }
 
 
+# Register API routes
 api.include_router(auth_router)
 api.include_router(ibp_router)
 api.include_router(exp_router)
@@ -116,11 +115,26 @@ api.include_router(admin_router)
 api.include_router(share_router)
 api.include_router(public_router)
 api.include_router(public_demo_router)
-api.include_router(webhook_router)
+api.include_router(webhooks_router)
 api.include_router(monitoring_router)
 
+
+# Global middleware — order matters
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 app.include_router(api)
-app.include_router(ws_router)   # WS lives at root level (no /api prefix needed for WebSocket)
+# WS endpoint registered at root (no /api prefix)
+app.include_router(ws_router)
 
 
 @app.on_event("startup")
@@ -132,12 +146,16 @@ async def startup():
     await db.ibp_jobs.create_index("id", unique=True)
     await db.ibp_jobs.create_index("user_id")
     await db.ibp_jobs.create_index("created_at")
-    await db.ibp_jobs.create_index("status")                  # NEW — filter by status
-    await db.ibp_jobs.create_index([("user_id", 1), ("status", 1)])   # compound for dashboard
+    await db.ibp_jobs.create_index("status")
+    await db.ibp_jobs.create_index([("user_id", 1), ("config_hash", 1), ("status", 1)])
+    await db.webhooks.create_index("user_id")
     await db.experiments.create_index("id", unique=True)
     await db.experiments.create_index("user_id")
     await db.api_keys.create_index("id", unique=True)
     await db.api_keys.create_index("key_hash", unique=True)
+    await db.export_presets.create_index("id", unique=True)
+    await db.export_presets.create_index("exp_id")
+    await db.export_presets.create_index("user_id")
     await db.shares.create_index("token", unique=True)
     await db.shares.create_index("user_id")
     await db.webhooks.create_index("user_id")
@@ -149,3 +167,4 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     get_client().close()
+    await db.ibp_jobs.create_index([("user_id", 1), ("status", 1)])   # compound for dashboard

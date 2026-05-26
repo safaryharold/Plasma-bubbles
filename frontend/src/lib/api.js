@@ -1,8 +1,10 @@
 import axios from "axios";
+import { tokenStore } from "./tokenStore";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
+<<<<<<< HEAD
 // withCredentials sends the httpOnly `access_token` cookie set by /auth/login.
 export const api = axios.create({ baseURL: API, withCredentials: true });
 
@@ -47,18 +49,45 @@ api.interceptors.response.use(
         window.location.href = "/login";
         return Promise.reject(refreshErr);
       } finally {
-        _isRefreshing = false;
-      }
-    }
-    return Promise.reject(err);
-  }
-);
+        import axios from "axios";
+        import { tokenStore } from "./tokenStore";
 
-export function formatApiError(err) {
-  const d = err?.response?.data?.detail;
-  if (d == null) return err?.message || "Something went wrong";
-  if (typeof d === "string") return d;
-  if (Array.isArray(d)) return d.map((e) => e?.msg || JSON.stringify(e)).join("; ");
-  if (d?.msg) return d.msg;
-  return String(d);
-}
+        const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+        export const API = `${BACKEND_URL}/api`;
+
+        export const api = axios.create({ baseURL: API, withCredentials: true });
+
+        /** Auto-refresh interceptor: on a 401 from any *non-auth* endpoint, try to
+         *  silently refresh the token once and retry. Falls through to /login if the
+         *  refresh itself returns 401. */
+        let refreshing = null;
+        api.interceptors.response.use(
+          (r) => r,
+          async (err) => {
+            const status = err?.response?.status;
+            const cfg = err?.config || {};
+            const url = cfg.url || "";
+            const isAuthCall = url.includes("/auth/login") || url.includes("/auth/register")
+              || url.includes("/auth/refresh") || url.includes("/auth/me");
+            if (status !== 401 || cfg._retried || isAuthCall) return Promise.reject(err);
+            cfg._retried = true;
+            if (!refreshing) {
+              refreshing = api.post("/auth/refresh")
+                .then(() => { tokenStore.markActive(); })
+                .catch((e) => {
+                  tokenStore.clear();
+                  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+                    window.location.assign("/login");
+                  }
+                  throw e;
+                })
+                .finally(() => { refreshing = null; });
+            }
+            try {
+              await refreshing;
+              return api(cfg);
+            } catch {
+              return Promise.reject(err);
+            }
+          },
+>>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)

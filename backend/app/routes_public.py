@@ -16,23 +16,10 @@ import logging
 from fastapi import APIRouter
 from . import ibp_service
 from .version import __version__
+from .cache import cache_get, cache_key, cache_set
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/public", tags=["public-demo"])
-
-_CACHE: dict = {}
-_TTL_SEC = 60 * 60  # 1 hour
-
-
-def _cache_get(key):
-    entry = _CACHE.get(key)
-    if entry and entry[0] > time.time():
-        return entry[1]
-    return None
-
-
-def _cache_put(key, value):
-    _CACHE[key] = (time.time() + _TTL_SEC, value)
 
 
 @router.get("/worldmap-demo")
@@ -42,8 +29,8 @@ async def worldmap_demo():
     f107 = 150.0
     lon_step = 20.0
     lat_step = 4.0
-    key = (day_month, f107, lon_step, lat_step)
-    cached = _cache_get(key)
+    key = cache_key(day_month, f107, lon_step, lat_step)
+    cached = await cache_get(key)
     if cached:
         return cached
     # sklearn GP regressor is CPU-bound; off-load to a thread so the FastAPI
@@ -55,7 +42,7 @@ async def worldmap_demo():
     payload["preview"] = True
     payload["caption"] = ("March equinox, F10.7=150 — illustrative preview. "
                           "Sign in to run custom sweeps, exports, and 3D climatologies.")
-    _cache_put(key, payload)
+    await cache_set(key, payload, ttl=3600)
     return payload
 
 

@@ -21,9 +21,6 @@ async def run_batch_job(job_id: str, params: dict) -> None:
         {"$set": {"status": "RUNNING", "started_at": now, "worker": "background_tasks"}},
     )
 
-    # Broadcast RUNNING status via WebSocket
-    await _ws_update(db, job_id)
-
     try:
         lons, lts = ibp_service.compute_grid(params)
         df = ibp_service.calculate(params["day_month"], lons, lts, params["f107"])
@@ -50,9 +47,15 @@ async def run_batch_job(job_id: str, params: dict) -> None:
                       "completed_at": datetime.now(timezone.utc).isoformat(),
                       "summary": summary, "result": result_doc}},
         )
-        # Notify via WS and webhooks
-        await _ws_update(db, job_id)
-        await _webhook_notify(db, job_id)
+
+        # Notify subscribers (WS clients + registered webhooks)
+        job_doc = await db.ibp_jobs.find_one({"id": job_id}, {"_id": 0, "result": 0})
+        if job_doc:
+            from .routes_ws import broadcast_job_update
+            from .routes_webhooks import trigger_webhooks
+            await broadcast_job_update(job_doc["user_id"], job_id, "COMPLETED", summary)
+            await trigger_webhooks(job_doc["user_id"], "job.completed", job_id,
+                                   {"summary": summary, "params": job_doc.get("params")})
 
     except Exception as exc:
         logger.error("Batch job %s failed: %s", job_id, exc)
@@ -61,27 +64,9 @@ async def run_batch_job(job_id: str, params: dict) -> None:
             {"$set": {"status": "FAILED", "error": str(exc),
                       "completed_at": datetime.now(timezone.utc).isoformat()}},
         )
-        await _ws_update(db, job_id)
-        await _webhook_notify(db, job_id)
-
-
-async def _ws_update(db, job_id: str):
-    """Push current job state to connected WebSocket clients (best-effort)."""
-    try:
-        from .websocket_manager import manager
-        job = await db.ibp_jobs.find_one({"id": job_id}, {"_id": 0, "result": 0})
-        if job:
-            await manager.broadcast_job(job["user_id"], job)
-    except Exception as exc:
-        logger.debug("WS broadcast skipped: %s", exc)
-
-
-async def _webhook_notify(db, job_id: str):
-    """Fire webhook for the job's owner (best-effort)."""
-    try:
-        from .routes_webhook import notify_job_complete
-        job = await db.ibp_jobs.find_one({"id": job_id}, {"_id": 0, "result": 0})
-        if job:
-            await notify_job_complete(job["user_id"], job)
-    except Exception as exc:
-        logger.debug("Webhook notify skipped: %s", exc)
+        job_doc = await db.ibp_jobs.find_one({"id": job_id}, {"_id": 0, "result": 0})
+        if job_doc:
+            from .routes_ws import broadcast_job_update
+            from .routes_webhooks import trigger_webhooks
+            await broadcast_job_update(job_doc["user_id"], job_id, "FAILED", {"error": str(exc)})
+            await trigger_webhooks(job_doc["user_id"], "job.failed", job_id, {"error": str(exc)})

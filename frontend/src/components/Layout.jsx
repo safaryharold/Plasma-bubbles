@@ -1,10 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import {
   Gauge, Calculator, GridFour, Flask, ArrowsLeftRight,
+<<<<<<< HEAD
   Key, Users, SignOut, Planet, Globe, Butterfly, List, X, Sun, Moon,
+=======
+  Key, Users, SignOut, Planet, Globe, Butterfly,
+  List, X, Sun, MoonStars,
+>>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
 } from "@phosphor-icons/react";
 
 const NAV = [
@@ -44,7 +49,6 @@ export default function Layout({ children }) {
   const { theme, toggle: toggleTheme, isDark } = useTheme();
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-
   const closeMenu = () => setMenuOpen(false);
 
   return (
@@ -71,9 +75,29 @@ export default function Layout({ children }) {
               <div className="font-sans font-black text-sm tracking-tight">IBP ANALYTICS</div>
             </div>
           </Link>
+<<<<<<< HEAD
 
           {/* Desktop controls */}
           <div className="flex items-center gap-4">
+=======
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF] md:text-sm"
+              aria-label="Toggle light or dark theme"
+              data-testid="theme-toggle"
+            >
+              {isLight ? <Sun size={16} /> : <MoonStars size={16} />}
+            </button>
+            <button
+              onClick={() => setMenuOpen(true)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF] md:hidden"
+              aria-label="Open navigation menu"
+              data-testid="mobile-menu-open"
+            >
+              <List size={20} />
+            </button>
+>>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
             <div className="hidden md:flex items-center gap-4 mono text-xs">
               <span className="text-[#565D6D] uppercase tracking-widest">User</span>
               <span className="text-white" data-testid="header-user-email">{user?.email}</span>
@@ -125,6 +149,7 @@ export default function Layout({ children }) {
         </div>
       </header>
 
+<<<<<<< HEAD
       {/* ── Mobile slide-down nav ───────────────────────────────────────── */}
       {menuOpen && (
         <nav
@@ -159,6 +184,11 @@ export default function Layout({ children }) {
           role="navigation"
         >
           <nav className="flex flex-col py-4" aria-label="Site navigation">
+=======
+      <div className="grid md:grid-cols-[220px_1fr] min-h-[calc(100vh-56px)]">
+        <aside className="hidden md:block border-r border-[#2A2D35] bg-[#090A0C]" data-testid="sidebar">
+          <nav className="flex flex-col py-4" aria-label="Main navigation">
+>>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
             {NAV.map((n) => (
               <NavItem key={n.to} {...n} />
             ))}
@@ -188,6 +218,7 @@ export default function Layout({ children }) {
           </div>
         </aside>
 
+<<<<<<< HEAD
         <main
           className="p-4 md:p-8 overflow-x-hidden"
           id="main-content"
@@ -196,7 +227,80 @@ export default function Layout({ children }) {
         >
           {children}
         </main>
+=======
+        <main className="p-6 md:p-8 overflow-x-hidden">{children}</main>
+>>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
       </div>
+
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+          aria-hidden="true"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-[#090A0C] border-r border-[#2A2D35] shadow-xl transition-transform duration-200 md:hidden ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
+        aria-label="Mobile navigation"
+      >
+        <div className="flex items-center justify-between px-4 py-4 border-b border-[#2A2D35]">
+          <span className="mono text-[10px] uppercase tracking-[0.3em] text-[#565D6D]">Menu</span>
+          <button
+            onClick={() => setMenuOpen(false)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF]"
+            aria-label="Close navigation menu"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <nav className="flex flex-col py-4" aria-label="Mobile main navigation">
+          {NAV.map((n) => (
+            <NavLink
+              key={n.to}
+              to={n.to}
+              data-testid={`mobile-${n.test}`}
+              onClick={() => setMenuOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-3 mono text-xs uppercase tracking-widest transition-colors border-l-2 ${
+                  isActive
+                    ? "border-[#0047FF] text-white bg-[#121418]"
+                    : "border-transparent text-[#8B93A5] hover:text-white hover:bg-[#121418]"
+                }`
+              }
+            >
+              <n.icon size={16} />
+              {n.label}
+            </NavLink>
+          ))}
+          {user?.role === "admin" && (
+            <NavLink
+              to="/admin"
+              data-testid="mobile-nav-admin"
+              onClick={() => setMenuOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-3 mono text-xs uppercase tracking-widest transition-colors border-l-2 ${
+                  isActive
+                    ? "border-[#FF3333] text-white bg-[#121418]"
+                    : "border-transparent text-[#8B93A5] hover:text-white hover:bg-[#121418]"
+                }`
+              }
+            >
+              <Users size={16} />
+              Admin
+            </NavLink>
+          )}
+        </nav>
+        <div className="px-4 pb-6 pt-4 border-t border-[#2A2D35]">
+          <button
+            onClick={toggleTheme}
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF]"
+            aria-label="Toggle light or dark theme"
+          >
+            {isLight ? <Sun size={16} /> : <MoonStars size={16} />}
+            {isLight ? "Switch to dark" : "Switch to light"}
+          </button>
+        </div>
+      </aside>
     </div>
   );
 }

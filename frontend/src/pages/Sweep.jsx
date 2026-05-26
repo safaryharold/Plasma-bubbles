@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { Surface3D, HotspotBars } from "../components/Plot";
 import { useIbpJob } from "../lib/hooks";
+import { useAuth } from "../context/AuthContext";
 import { Lightning, DownloadSimple, FloppyDisk, ArrowClockwise } from "@phosphor-icons/react";
 
 export default function Sweep() {
+  const { user } = useAuth();
   const [form, setForm] = useState({
     name: "Post-sunset equatorial sweep",
     day_month: 3, f107: 150,
