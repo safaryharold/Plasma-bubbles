@@ -1,43 +1,38 @@
-"""Shared helpers for auth route handlers.
-
-Sets/clears the `access_token` httpOnly cookie so the SPA does not need to
-persist the JWT in `localStorage` (which is vulnerable to XSS exfiltration).
-The backend continues to also return the token in the response body, so
-programmatic clients (CI/CD tests, CLIs) using `Authorization: Bearer …`
-continue to work unchanged.
-"""
-from __future__ import annotations
+"""Cookie helpers for access and refresh tokens."""
 import os
-from fastapi import Response
+from starlette.responses import Response
 
-# Persistent (remember-me) cookie lifetime — 7 days
-REMEMBER_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-
-# In dev preview both FE and BE share the same origin, so Lax + secure works.
-COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "true").lower() != "false"
-COOKIE_SAMESITE = os.environ.get("AUTH_COOKIE_SAMESITE", "lax")
+_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() != "false"
+_SAME_SITE = os.environ.get("COOKIE_SAMESITE", "lax")
 
 
-def set_auth_cookie(response: Response, token: str, remember: bool = False) -> None:
-    """Set the JWT as an httpOnly cookie.
-
-    When `remember=False` (default), Max-Age is omitted so the cookie behaves
-    as a *session cookie* — it is deleted when the browser closes. When
-    `remember=True`, the cookie persists for 7 days even across browser
-    restarts.
-    """
-    kwargs = {
-        "key": "access_token",
-        "value": token,
-        "httponly": True,
-        "secure": COOKIE_SECURE,
-        "samesite": COOKIE_SAMESITE,
-        "path": "/",
-    }
-    if remember:
-        kwargs["max_age"] = REMEMBER_COOKIE_MAX_AGE
-    response.set_cookie(**kwargs)
+def set_auth_cookie(response: Response, token: str, remember: bool = False):
+    """Set the httpOnly access token cookie."""
+    max_age = 60 * 60 * 24 * 7 if remember else None   # 7 days if "remember me"
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=_SECURE,
+        samesite=_SAME_SITE,
+        max_age=max_age,
+        path="/",
+    )
 
 
-def clear_auth_cookie(response: Response) -> None:
-    response.delete_cookie(key="access_token", path="/")
+def set_refresh_cookie(response: Response, token: str):
+    """Set the httpOnly refresh token cookie (30-day persistent)."""
+    response.set_cookie(
+        key="refresh_token",
+        value=token,
+        httponly=True,
+        secure=_SECURE,
+        samesite=_SAME_SITE,
+        max_age=60 * 60 * 24 * 30,
+        path="/api/auth/refresh",   # scoped so it's only sent to the refresh endpoint
+    )
+
+
+def clear_auth_cookie(response: Response):
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/api/auth/refresh")

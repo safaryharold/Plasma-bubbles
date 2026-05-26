@@ -1,51 +1,109 @@
-version: '3.8'
+version: "3.9"
 
 services:
+  # ── MongoDB ──────────────────────────────────────────────────────────────────
   mongo:
-    image: mongo:6.0
+    image: mongo:7.0
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: plasma_bubbles
-    ports:
-      - "27017:27017"
+      MONGO_INITDB_DATABASE: ibp
     volumes:
       - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ── Redis (caching + Celery broker) ──────────────────────────────────────────
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    volumes:
+      - redis_data:/data
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ── Backend ───────────────────────────────────────────────────────────────────
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     restart: unless-stopped
     environment:
-      MONGO_URL: mongodb://admin:password@mongo:27017/plasma_bubbles?authSource=admin
-      DB_NAME: plasma_bubbles
-      REDIS_URL: redis://redis:6379/0
-      CORS_ORIGINS: http://localhost:3000
+      - MONGODB_URI=mongodb://mongo:27017/ibp
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@ibp.dev}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - COOKIE_SECURE=false      # set true behind HTTPS
+      - IBP_CACHE_TTL=3600
     ports:
-      - "8000:8000"
+      - "8001:8001"
     depends_on:
-      - mongo
-      - redis
+      mongo:  { condition: service_healthy }
+      redis:  { condition: service_healthy }
     volumes:
       - ./backend:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
+  # ── Celery worker ─────────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    command: celery -A app.celery_app.celery worker --loglevel=info --concurrency=4
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/ibp
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+    depends_on:
+      mongo:   { condition: service_healthy }
+      redis:   { condition: service_healthy }
+      backend: { condition: service_healthy }
+
+  # ── Frontend ──────────────────────────────────────────────────────────────────
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
     restart: unless-stopped
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:8001
     ports:
       - "3000:3000"
     depends_on:
       - backend
 
+  # ── Automated MongoDB backup (runs daily at 02:00 UTC) ────────────────────────
+  backup:
+    image: mongo:7.0
+    restart: "no"
+    profiles: ["backup"]    # opt-in: docker compose --profile backup up backup
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/ibp
+      - BACKUP_DIR=/backups
+    volumes:
+      - ./scripts:/scripts:ro
+      - backup_data:/backups
+    command: /scripts/backup_mongodb.sh
+    depends_on:
+      mongo: { condition: service_healthy }
+
 volumes:
   mongo_data:
+  redis_data:
+  backup_data:

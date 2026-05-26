@@ -79,3 +79,33 @@ body {
 ::-webkit-scrollbar-track { background: #090A0C; }
 ::-webkit-scrollbar-thumb { background: #2A2D35; }
 ::-webkit-scrollbar-thumb:hover { background: #0047FF; }
+
+/* ── Light mode overrides ─────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-primary:   #F4F5F7;
+  --bg-secondary: #FFFFFF;
+  --bg-card:      #FFFFFF;
+  --border:       #D8DBE3;
+  --text-primary: #0A0C10;
+  --text-muted:   #5A6270;
+  --text-dim:     #9BA3AF;
+}
+
+[data-theme="light"] body,
+[data-theme="light"] .bg-\[\#090A0C\] {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .bg-\[\#121418\] {
+  background-color: var(--bg-secondary) !important;
+}
+
+[data-theme="light"] .border-\[\#2A2D35\] {
+  border-color: var(--border) !important;
+}
+
+[data-theme="light"] .text-\[\#8B93A5\],
+[data-theme="light"] .text-\[\#565D6D\] {
+  color: var(--text-muted) !important;
+}

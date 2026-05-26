@@ -1,0 +1,4 @@
+# IBP Analytics — MongoDB backup schedule
+# Install: crontab -e, then paste this line:
+# Daily at 02:00 UTC
+0 2 * * * cd /opt/ibp && MONGODB_URI="$MONGODB_URI" S3_BUCKET="$S3_BUCKET" ./scripts/backup_mongodb.sh >> /var/log/ibp_backup.log 2>&1

@@ -124,3 +124,31 @@ async def seed_admin():
             {"email": email},
             {"$set": {"password_hash": hash_password(password), "role": "admin"}},
         )
+
+
+# ── Refresh token support ─────────────────────────────────────────────────────
+
+REFRESH_TOKEN_TTL_DAYS = 30
+
+
+def create_refresh_token(user_id: str) -> str:
+    payload = {
+        "sub": user_id,
+        "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_TTL_DAYS),
+        "iat": datetime.now(timezone.utc),
+        "type": "refresh",
+        "jti": str(uuid.uuid4()),   # unique ID so we can invalidate individual tokens
+    }
+    return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALGORITHM)
+
+
+def decode_refresh_token(token: str) -> dict:
+    try:
+        payload = jwt.decode(token, os.environ["JWT_SECRET"], algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    return payload

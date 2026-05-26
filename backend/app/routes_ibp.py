@@ -11,6 +11,7 @@ from .models import IBPCalculateRequest, IBPCalculateResult, IBPBatchRequest, Jo
 from .auth import get_current_user
 from .db import get_db
 from . import ibp_service, rate_limit
+from .cache import cache_get, cache_set, make_cache_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ibp", tags=["ibp"])
@@ -270,7 +271,14 @@ async def worldmap(day_month: int = 3, f107: float = 150.0, lon_step: float = 10
         raise HTTPException(status_code=400, detail="invalid params")
     if not (0.5 <= lat_step <= 10):
         raise HTTPException(status_code=400, detail="lat_step must be 0.5..10")
-    return ibp_service.worldmap_grid(day_month, f107, lon_step, lat_half_range=25.0, lat_step=lat_step)
+    cache_params = {"day_month": day_month, "f107": f107, "lon_step": lon_step, "lat_step": lat_step}
+    key = make_cache_key("worldmap", cache_params)
+    cached = await cache_get(key)
+    if cached:
+        return cached
+    result = ibp_service.worldmap_grid(day_month, f107, lon_step, lat_half_range=25.0, lat_step=lat_step)
+    await cache_set(key, result)
+    return result
 
 
 # --- Butterfly diagram (Month × Longitude at fixed LT) ---
@@ -281,5 +289,12 @@ async def butterfly(lt: float = 21.0, f107: float = 150.0, lon_step: float = 5.0
     rate_limit.check(user)
     if not (0 <= lt <= 24) or not (60 <= f107 <= 300) or not (1 <= lon_step <= 60):
         raise HTTPException(status_code=400, detail="invalid params")
-    return ibp_service.butterfly_grid(lt=lt, f107=f107, lon_step=lon_step)
+    cache_params = {"lt": lt, "f107": f107, "lon_step": lon_step}
+    key = make_cache_key("butterfly", cache_params)
+    cached = await cache_get(key)
+    if cached:
+        return cached
+    result = ibp_service.butterfly_grid(lt=lt, f107=f107, lon_step=lon_step)
+    await cache_set(key, result)
+    return result
 
