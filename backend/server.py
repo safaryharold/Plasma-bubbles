@@ -14,6 +14,7 @@ from starlette.middleware.gzip import GZipMiddleware  # noqa: E402
 from app.db import get_db, get_client  # noqa: E402
 from app.auth import seed_admin  # noqa: E402
 from app.middleware import LoggingMiddleware  # noqa: E402
+from app.middleware_logging import RequestLoggingMiddleware  # noqa: E402
 from app.routes_auth import router as auth_router  # noqa: E402
 from app.routes_ibp import router as ibp_router  # noqa: E402
 from app.routes_experiments import router as exp_router  # noqa: E402

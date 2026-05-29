@@ -1,15 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import {
   Gauge, Calculator, GridFour, Flask, ArrowsLeftRight,
-<<<<<<< HEAD
-  Key, Users, SignOut, Planet, Globe, Butterfly, List, X, Sun, Moon,
-=======
-  Key, Users, SignOut, Planet, Globe, Butterfly,
-  List, X, Sun, MoonStars,
->>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
+  Key, Users, SignOut, Planet, Globe, Butterfly, List, X, Sun, MoonStars,
 } from "@phosphor-icons/react";
 
 const NAV = [
@@ -46,21 +41,14 @@ function NavItem({ to, label, icon: Icon, test, onClick }) {
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth();
-  const { theme, toggle: toggleTheme, isDark } = useTheme();
-  const nav = useNavigate();
+  const { toggle: toggleTheme, isDark } = useTheme();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const closeMenu = () => setMenuOpen(false);
 
   return (
     <div className="min-h-screen bg-[#090A0C] text-white">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header
-        className="sticky top-0 z-50 bg-[#090A0C] border-b border-[#2A2D35]"
-        data-testid="app-header"
-        role="banner"
-      >
+      <header className="sticky top-0 z-50 bg-[#090A0C] border-b border-[#2A2D35]" data-testid="app-header" role="banner">
         <div className="flex items-center justify-between px-4 md:px-8 h-14">
-          {/* Brand */}
           <Link
             to="/dashboard"
             className="flex items-center gap-3 group focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0047FF]"
@@ -75,29 +63,8 @@ export default function Layout({ children }) {
               <div className="font-sans font-black text-sm tracking-tight">IBP ANALYTICS</div>
             </div>
           </Link>
-<<<<<<< HEAD
 
-          {/* Desktop controls */}
-          <div className="flex items-center gap-4">
-=======
           <div className="flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF] md:text-sm"
-              aria-label="Toggle light or dark theme"
-              data-testid="theme-toggle"
-            >
-              {isLight ? <Sun size={16} /> : <MoonStars size={16} />}
-            </button>
-            <button
-              onClick={() => setMenuOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF] md:hidden"
-              aria-label="Open navigation menu"
-              data-testid="mobile-menu-open"
-            >
-              <List size={20} />
-            </button>
->>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
             <div className="hidden md:flex items-center gap-4 mono text-xs">
               <span className="text-[#565D6D] uppercase tracking-widest">User</span>
               <span className="text-white" data-testid="header-user-email">{user?.email}</span>
@@ -114,83 +81,42 @@ export default function Layout({ children }) {
               </span>
             </div>
 
-            {/* Dark mode toggle */}
             <button
               onClick={toggleTheme}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF]"
               aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
               aria-pressed={!isDark}
-              className="p-2 text-[#8B93A5] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0047FF]"
+              data-testid="theme-toggle"
             >
-              {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+              {isDark ? <Sun size={16} aria-hidden="true" /> : <MoonStars size={16} aria-hidden="true" />}
             </button>
 
-            {/* Logout — desktop */}
             <button
-              onClick={async () => { await signOut(); nav("/"); }}
+              onClick={() => setMenuOpen(true)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF] md:hidden"
+              aria-label="Open navigation menu"
+              data-testid="mobile-menu-open"
+            >
+              <List size={20} aria-hidden="true" />
+            </button>
+
+            <button
+              onClick={async () => { await signOut(); navigate("/"); }}
               className="hidden md:flex mono text-xs uppercase tracking-widest text-[#8B93A5] hover:text-white items-center gap-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0047FF]"
               data-testid="logout-btn"
               aria-label="Log out"
             >
               <SignOut size={14} aria-hidden="true" /> Logout
             </button>
-
-            {/* Hamburger — mobile only */}
-            <button
-              className="md:hidden p-2 text-[#8B93A5] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0047FF]"
-              aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
-              aria-expanded={menuOpen}
-              aria-controls="mobile-nav"
-              onClick={() => setMenuOpen((o) => !o)}
-              data-testid="mobile-menu-btn"
-            >
-              {menuOpen ? <X size={20} aria-hidden="true" /> : <List size={20} aria-hidden="true" />}
-            </button>
           </div>
         </div>
       </header>
 
-<<<<<<< HEAD
-      {/* ── Mobile slide-down nav ───────────────────────────────────────── */}
-      {menuOpen && (
-        <nav
-          id="mobile-nav"
-          className="md:hidden bg-[#090A0C] border-b border-[#2A2D35] z-40"
-          aria-label="Mobile navigation"
-        >
-          {NAV.map((n) => (
-            <NavItem key={n.to} {...n} onClick={closeMenu} />
-          ))}
-          {user?.role === "admin" && (
-            <NavItem to="/admin" label="Admin" icon={Users} test="nav-admin-mobile" onClick={closeMenu} />
-          )}
-          <div className="px-6 py-4 border-t border-[#2A2D35]">
-            <button
-              onClick={async () => { closeMenu(); await signOut(); nav("/"); }}
-              className="mono text-xs uppercase tracking-widest text-[#8B93A5] hover:text-white flex items-center gap-2 transition-colors"
-            >
-              <SignOut size={14} aria-hidden="true" /> Logout
-            </button>
-          </div>
-        </nav>
-      )}
-
-      {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className="grid md:grid-cols-[220px_1fr] min-h-[calc(100vh-56px)]">
-        {/* Desktop sidebar */}
-        <aside
-          className="hidden md:block border-r border-[#2A2D35] bg-[#090A0C]"
-          data-testid="sidebar"
-          aria-label="Main navigation"
-          role="navigation"
-        >
+        <aside className="hidden md:block border-r border-[#2A2D35] bg-[#090A0C]" data-testid="sidebar" role="navigation" aria-label="Main navigation">
           <nav className="flex flex-col py-4" aria-label="Site navigation">
-=======
-      <div className="grid md:grid-cols-[220px_1fr] min-h-[calc(100vh-56px)]">
-        <aside className="hidden md:block border-r border-[#2A2D35] bg-[#090A0C]" data-testid="sidebar">
-          <nav className="flex flex-col py-4" aria-label="Main navigation">
->>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
-            {NAV.map((n) => (
-              <NavItem key={n.to} {...n} />
+            {NAV.map((item) => (
+              <NavItem key={item.to} {...item} />
             ))}
             {user?.role === "admin" && (
               <NavLink
@@ -204,8 +130,7 @@ export default function Layout({ children }) {
                   } focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0047FF]`
                 }
               >
-                <Users size={16} aria-hidden="true" />
-                Admin
+                <Users size={16} aria-hidden="true" /> Admin
               </NavLink>
             )}
           </nav>
@@ -218,26 +143,13 @@ export default function Layout({ children }) {
           </div>
         </aside>
 
-<<<<<<< HEAD
-        <main
-          className="p-4 md:p-8 overflow-x-hidden"
-          id="main-content"
-          role="main"
-          tabIndex={-1}
-        >
+        <main className="p-6 md:p-8 overflow-x-hidden" id="main-content" role="main" tabIndex={-1}>
           {children}
         </main>
-=======
-        <main className="p-6 md:p-8 overflow-x-hidden">{children}</main>
->>>>>>> f4c5339 (Apply requested frontend/backend fixes: error boundary, mobile nav, dark mode, export preset routes, Redis public cache, and auth refresh support)
       </div>
 
       {menuOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
-          aria-hidden="true"
-          onClick={() => setMenuOpen(false)}
-        />
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden" aria-hidden="true" onClick={() => setMenuOpen(false)} />
       )}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-[#090A0C] border-r border-[#2A2D35] shadow-xl transition-transform duration-200 md:hidden ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
@@ -250,15 +162,16 @@ export default function Layout({ children }) {
             className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF]"
             aria-label="Close navigation menu"
           >
-            <X size={20} />
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
+
         <nav className="flex flex-col py-4" aria-label="Mobile main navigation">
-          {NAV.map((n) => (
+          {NAV.map((item) => (
             <NavLink
-              key={n.to}
-              to={n.to}
-              data-testid={`mobile-${n.test}`}
+              key={item.to}
+              to={item.to}
+              data-testid={`mobile-${item.test}`}
               onClick={() => setMenuOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 mono text-xs uppercase tracking-widest transition-colors border-l-2 ${
@@ -268,8 +181,8 @@ export default function Layout({ children }) {
                 }`
               }
             >
-              <n.icon size={16} />
-              {n.label}
+              <item.icon size={16} aria-hidden="true" />
+              {item.label}
             </NavLink>
           ))}
           {user?.role === "admin" && (
@@ -285,19 +198,19 @@ export default function Layout({ children }) {
                 }`
               }
             >
-              <Users size={16} />
-              Admin
+              <Users size={16} aria-hidden="true" /> Admin
             </NavLink>
           )}
         </nav>
+
         <div className="px-4 pb-6 pt-4 border-t border-[#2A2D35]">
           <button
             onClick={toggleTheme}
             className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF]"
             aria-label="Toggle light or dark theme"
           >
-            {isLight ? <Sun size={16} /> : <MoonStars size={16} />}
-            {isLight ? "Switch to dark" : "Switch to light"}
+            {isDark ? <Sun size={16} aria-hidden="true" /> : <MoonStars size={16} aria-hidden="true" />}
+            {isDark ? "Switch to light" : "Switch to dark"}
           </button>
         </div>
       </aside>

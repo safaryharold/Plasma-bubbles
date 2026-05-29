@@ -15,7 +15,7 @@ export function AuthProvider({ children }) {
       // Optimistically still try /auth/me — the cookie might exist from another tab.
     }
     api.get("/auth/me")
-      .then((r) => { tokenStore.markActive(); setUser(r.data); })
+      .then((r) => { tokenStore.markActive(); tokenStore.markRefreshed(); setUser(r.data); })
       .catch(() => { tokenStore.clear(); setUser(false); })
       .finally(() => setLoading(false));
   }, []);
@@ -23,6 +23,7 @@ export function AuthProvider({ children }) {
   const signIn = useCallback(async (email, password, remember = false) => {
     const { data } = await api.post("/auth/login", { email, password, remember });
     tokenStore.markActive();
+    tokenStore.markRefreshed();
     setUser(data.user);
     return data.user;
   }, []);
@@ -30,6 +31,7 @@ export function AuthProvider({ children }) {
   const signUp = useCallback(async (payload) => {
     const { data } = await api.post("/auth/register", payload);
     tokenStore.markActive();
+    tokenStore.markRefreshed();
     setUser(data.user);
     return data.user;
   }, []);
