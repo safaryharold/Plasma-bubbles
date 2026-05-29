@@ -1,14 +1,27 @@
 import React, { useEffect, useState } from "react";
 import { api, formatApiError } from "../lib/api";
 import { Copy, Plus, Prohibit } from "@phosphor-icons/react";
+import { CardSkeleton } from "../components/Skeleton";
 
 export default function ApiKeys() {
   const [keys, setKeys] = useState([]);
   const [name, setName] = useState("default");
   const [created, setCreated] = useState(null);
   const [err, setErr] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get("/keys").then((r) => setKeys(r.data)).catch((e) => setErr(formatApiError(e)));
+  const load = async () => {
+    setErr(null);
+    setLoading(true);
+    try {
+      const { data } = await api.get("/keys");
+      setKeys(data);
+    } catch (e) {
+      setErr(formatApiError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => { load(); }, []);
 
   const create = async () => {
@@ -63,37 +76,45 @@ export default function ApiKeys() {
 
       {err && <div className="mono text-xs text-[#FF3333] border border-[#FF3333]/40 bg-[#FF3333]/5 px-3 py-2">{err}</div>}
 
-      <div className="border border-[#2A2D35]">
-        <div className="grid grid-cols-12 px-6 h-10 items-center border-b border-[#2A2D35] mono text-[10px] uppercase tracking-[0.25em] text-[#565D6D]">
-          <div className="col-span-3">Name</div>
-          <div className="col-span-3">Prefix</div>
-          <div className="col-span-2">Calls</div>
-          <div className="col-span-2">Last used</div>
-          <div className="col-span-2 text-right">Status</div>
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {[...Array(2)].map((_, idx) => <CardSkeleton key={idx} />)}
         </div>
-        {keys.length === 0 ? (
-          <div className="p-8 text-center mono text-xs text-[#565D6D]">No API keys yet.</div>
-        ) : keys.map((k) => (
-          <div key={k.id} className="grid grid-cols-12 items-center px-6 py-4 border-b last:border-b-0 border-[#2A2D35] mono text-xs" data-testid={`key-row-${k.id}`}>
-            <div className="col-span-3 font-bold">{k.name}</div>
-            <div className="col-span-3 text-[#0047FF]">{k.key_prefix}…</div>
-            <div className="col-span-2">{k.call_count}</div>
-            <div className="col-span-2 text-[#565D6D]">{k.last_used ? new Date(k.last_used).toLocaleString() : "—"}</div>
-            <div className="col-span-2 flex justify-end items-center gap-3">
-              {k.revoked ? (
-                <span className="text-[#FF3333] uppercase tracking-widest text-[10px]">revoked</span>
-              ) : (
-                <>
-                  <span className="text-[#00E599] uppercase tracking-widest text-[10px]">active</span>
-                  <button onClick={() => revoke(k.id)} data-testid={`revoke-${k.id}`} className="text-[#8B93A5] hover:text-[#FF3333] transition-colors" title="Revoke">
-                    <Prohibit size={14} />
-                  </button>
-                </>
-              )}
-            </div>
+      ) : (
+        <div className="border border-[#2A2D35]">
+          <div className="grid grid-cols-12 px-6 h-10 items-center border-b border-[#2A2D35] mono text-[10px] uppercase tracking-[0.25em] text-[#565D6D]">
+            <div className="col-span-3">Name</div>
+            <div className="col-span-3">Prefix</div>
+            <div className="col-span-2">Calls</div>
+            <div className="col-span-2">Last used</div>
+            <div className="col-span-2 text-right">Status</div>
           </div>
-        ))}
-      </div>
+          {keys.length === 0 ? (
+            <div className="p-8 text-center mono text-xs text-[#565D6D]">No API keys yet.</div>
+          ) : (
+            keys.map((k) => (
+              <div key={k.id} className="grid grid-cols-12 items-center px-6 py-4 border-b last:border-b-0 border-[#2A2D35] mono text-xs" data-testid={`key-row-${k.id}`}>
+                <div className="col-span-3 font-bold">{k.name}</div>
+                <div className="col-span-3 text-[#0047FF]">{k.key_prefix}…</div>
+                <div className="col-span-2">{k.call_count}</div>
+                <div className="col-span-2 text-[#565D6D]">{k.last_used ? new Date(k.last_used).toLocaleString() : "—"}</div>
+                <div className="col-span-2 flex justify-end items-center gap-3">
+                  {k.revoked ? (
+                    <span className="text-[#FF3333] uppercase tracking-widest text-[10px]">revoked</span>
+                  ) : (
+                    <span className="flex items-center gap-3">
+                      <span className="text-[#00E599] uppercase tracking-widest text-[10px]">active</span>
+                      <button onClick={() => revoke(k.id)} data-testid={`revoke-${k.id}`} className="text-[#8B93A5] hover:text-[#FF3333] transition-colors" title="Revoke">
+                        <Prohibit size={14} />
+                      </button>
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

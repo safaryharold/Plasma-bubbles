@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import {
   Gauge, Calculator, GridFour, Flask, ArrowsLeftRight,
-  Key, Users, SignOut, Planet, Globe, Butterfly, List, X, Sun, MoonStars,
+  Key, Users, SignOut, Planet, Globe, Butterfly, Gear, List, X, Sun, MoonStars,
 } from "@phosphor-icons/react";
 
 const NAV = [
@@ -16,6 +16,7 @@ const NAV = [
   { to: "/experiments", label: "Experiments",       icon: Flask,           test: "nav-experiments"},
   { to: "/compare",     label: "A/B Compare",       icon: ArrowsLeftRight, test: "nav-compare"   },
   { to: "/keys",        label: "API Keys",          icon: Key,             test: "nav-keys"       },
+  { to: "/settings",    label: "Settings",          icon: Gear,            test: "nav-settings"   },
 ];
 
 function NavItem({ to, label, icon: Icon, test, onClick }) {
@@ -44,6 +45,26 @@ export default function Layout({ children }) {
   const { toggle: toggleTheme, isDark } = useTheme();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef(null);
+  const closeButtonRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    closeButtonRef.current?.focus();
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      menuButtonRef.current?.focus();
+    }
+  }, [menuOpen]);
 
   return (
     <div className="min-h-screen bg-[#090A0C] text-white">
@@ -92,9 +113,12 @@ export default function Layout({ children }) {
             </button>
 
             <button
+              ref={menuButtonRef}
               onClick={() => setMenuOpen(true)}
               className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF] md:hidden"
               aria-label="Open navigation menu"
+              aria-controls="mobile-navigation"
+              aria-expanded={menuOpen}
               data-testid="mobile-menu-open"
             >
               <List size={20} aria-hidden="true" />
@@ -152,12 +176,14 @@ export default function Layout({ children }) {
         <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden" aria-hidden="true" onClick={() => setMenuOpen(false)} />
       )}
       <aside
+        id="mobile-navigation"
         className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-[#090A0C] border-r border-[#2A2D35] shadow-xl transition-transform duration-200 md:hidden ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
         aria-label="Mobile navigation"
       >
         <div className="flex items-center justify-between px-4 py-4 border-b border-[#2A2D35]">
           <span className="mono text-[10px] uppercase tracking-[0.3em] text-[#565D6D]">Menu</span>
           <button
+            ref={closeButtonRef}
             onClick={() => setMenuOpen(false)}
             className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#2A2D35] bg-[#121418] text-[#8B93A5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#0047FF]"
             aria-label="Close navigation menu"

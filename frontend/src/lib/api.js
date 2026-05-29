@@ -48,3 +48,39 @@ api.interceptors.response.use(
     }
   }
 );
+
+// Proactively refresh access token if needed before sending requests.
+api.interceptors.request.use(async (config) => {
+  try {
+    const url = config?.url || "";
+    if (isAuthRoute(url) || !tokenStore.isActive()) return config;
+
+    if (tokenStore.shouldRefresh()) {
+      if (!refreshPromise) {
+        refreshPromise = api.post("/auth/refresh")
+          .then(() => { tokenStore.markActive(); tokenStore.markRefreshed(); })
+          .catch((err) => {
+            tokenStore.clear();
+            if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+              window.location.assign("/login");
+            }
+            throw err;
+          })
+          .finally(() => { refreshPromise = null; });
+      }
+      await refreshPromise;
+    }
+  } catch (err) {
+    // If refresh failed, allow request to proceed — response interceptor will handle 401.
+  }
+  return config;
+});
+
+export function formatApiError(error) {
+  if (!error) return "Unknown error";
+  const data = error.response?.data;
+  if (data?.detail) return String(data.detail);
+  if (data?.message) return String(data.message);
+  if (typeof error.message === "string") return error.message;
+  return "An unexpected error occurred.";
+}

@@ -19,6 +19,7 @@ const Sweep       = lazy(() => import("./pages/Sweep"));
 const Experiments = lazy(() => import("./pages/Experiments"));
 const Compare     = lazy(() => import("./pages/Compare"));
 const ApiKeys     = lazy(() => import("./pages/ApiKeys"));
+const Settings    = lazy(() => import("./pages/Settings"));
 const Admin       = lazy(() => import("./pages/Admin"));
 const WorldMap    = lazy(() => import("./pages/WorldMap"));
 const Butterfly   = lazy(() => import("./pages/Butterfly"));
@@ -53,6 +54,7 @@ function App() {
                 <Route path="/worldmap"   element={<ProtectedRoute><Layout><WorldMap /></Layout></ProtectedRoute>} />
                 <Route path="/butterfly"  element={<ProtectedRoute><Layout><Butterfly /></Layout></ProtectedRoute>} />
                 <Route path="/keys"       element={<ProtectedRoute><Layout><ApiKeys /></Layout></ProtectedRoute>} />
+                <Route path="/settings"   element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
                 <Route path="/admin"      element={<ProtectedRoute requireRole={["admin"]}><Layout><Admin /></Layout></ProtectedRoute>} />
                 <Route path="/s/:token"   element={<PublicShare />} />
                 <Route path="*"           element={<Navigate to="/" replace />} />

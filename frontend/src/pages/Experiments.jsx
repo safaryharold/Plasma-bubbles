@@ -1,12 +1,26 @@
 import React, { useEffect, useState } from "react";
 import { api, formatApiError } from "../lib/api";
 import { Copy, Trash, ArrowsClockwise } from "@phosphor-icons/react";
+import { CardSkeleton } from "../components/Skeleton";
 
 export default function Experiments() {
   const [items, setItems] = useState([]);
   const [err, setErr] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get("/experiments").then((r) => setItems(r.data)).catch((e) => setErr(formatApiError(e)));
+  const load = async () => {
+    setErr(null);
+    setLoading(true);
+    try {
+      const { data } = await api.get("/experiments");
+      setItems(data);
+    } catch (e) {
+      setErr(formatApiError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => { load(); }, []);
 
   const clone = async (id) => {
@@ -31,7 +45,11 @@ export default function Experiments() {
 
       {err && <div className="mono text-xs text-[#FF3333] border border-[#FF3333]/40 bg-[#FF3333]/5 px-3 py-2">{err}</div>}
 
-      {items.length === 0 ? (
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {[...Array(4)].map((_, idx) => <CardSkeleton key={idx} />)}
+        </div>
+      ) : items.length === 0 ? (
         <div className="border border-[#2A2D35] p-12 text-center mono text-xs text-[#565D6D]">
           No experiments yet. Save a sweep configuration to populate this library.
         </div>

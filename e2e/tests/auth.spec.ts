@@ -43,4 +43,18 @@ test.describe("Authentication flows", () => {
     await page.click('[data-testid="logout-btn"]');
     await expect(page).toHaveURL("/");
   });
+
+  test("settings page is accessible and toggles theme", async ({ page }) => {
+    await page.goto("/login");
+    await page.fill('[data-testid="login-email"]',    TEST_EMAIL);
+    await page.fill('[data-testid="login-password"]', TEST_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await expect(page).toHaveURL(/\/dashboard/);
+
+    await page.click('[data-testid="nav-settings"]');
+    await expect(page).toHaveURL(/\/settings/);
+    await expect(page.getByTestId("settings-page")).toBeVisible();
+    await page.click('[data-testid="settings-theme-toggle"]');
+    await expect(page.getByTestId("settings-theme-toggle")).toBeVisible();
+  });
 });

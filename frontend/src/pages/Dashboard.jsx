@@ -13,11 +13,13 @@ export default function Dashboard() {
   const [usage, setUsage] = useState(null);
   const [experiments, setExperiments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showTour, setShowTour] = useState(false);
 
   // Merge live WS job updates into local state
   const { liveJobs } = useJobSocket();
 
   useEffect(() => {
+    setShowTour(localStorage.getItem("ibp_onboard_complete") !== "1");
     Promise.all([
       api.get("/ibp/jobs").then((r) => setJobs(r.data)),
       api.get("/ibp/usage").then((r) => setUsage(r.data)),
@@ -48,6 +50,26 @@ export default function Dashboard() {
           Command Center <span className="text-[#8B93A5]">// operational</span>
         </h1>
       </div>
+
+      {showTour && !loading && (
+        <div className="border border-[#2A2D35] bg-[#090A0C] p-5 rounded-xl" role="region" aria-live="polite" aria-label="Welcome tour">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="mono text-[10px] uppercase tracking-[0.25em] text-[#565D6D] mb-2">— first time here?</p>
+              <h2 className="font-black text-xl">Start with your first sweep or experiment.</h2>
+              <p className="mono text-xs text-[#8B93A5] mt-2 max-w-2xl">
+                The dashboard keeps your recent jobs, usage analytics, and live job progress up to date. Click "Got it" to hide this message permanently.
+              </p>
+            </div>
+            <button
+              onClick={() => { localStorage.setItem("ibp_onboard_complete", "1"); setShowTour(false); }}
+              className="h-12 inline-flex items-center justify-center gap-2 rounded-md border border-[#2A2D35] bg-[#0047FF] px-4 text-xs uppercase tracking-[0.25em] text-white hover:bg-[#336DFF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0047FF]"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Active job progress */}
       {activeJob && (

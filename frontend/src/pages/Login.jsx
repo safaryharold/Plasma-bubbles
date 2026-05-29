@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { formatApiError } from "../lib/api";
+import { LoadingButton } from "../components/Skeleton";
 import { Planet, ArrowRight } from "@phosphor-icons/react";
 
 export default function Login() {
@@ -96,9 +97,14 @@ export default function Login() {
               </span>
             </label>
 
-            <button type="submit" disabled={loading} data-testid="login-submit" className="w-full h-12 bg-[#0047FF] hover:bg-[#336DFF] text-white mono text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-              {loading ? "Authenticating..." : <>Sign in <ArrowRight size={14} /></>}
-            </button>
+            <LoadingButton
+              type="submit"
+              loading={loading}
+              data-testid="login-submit"
+              className="w-full h-12 bg-[#0047FF] hover:bg-[#336DFF] text-white mono text-xs uppercase tracking-[0.25em] justify-center disabled:opacity-50"
+            >
+              {loading ? "Authenticating…" : <>Sign in <ArrowRight size={14} /></>}
+            </LoadingButton>
           </form>
           <div className="mt-10 border-t border-[#2A2D35] pt-6 mono text-[10px] uppercase tracking-[0.25em] text-[#565D6D]">
             Seeded admin: admin@ibp.dev / admin123

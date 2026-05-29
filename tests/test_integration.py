@@ -87,6 +87,20 @@ async def test_me_authenticated(client):
     assert r.json()["email"] == RESEARCHER["email"]
 
 
+@pytest.mark.anyio
+async def test_refresh_token_route(client):
+    # Log in and confirm refresh works using the same client cookie jar.
+    login = await client.post("/api/auth/login", json={
+        "email": RESEARCHER["email"],
+        "password": RESEARCHER["password"],
+    })
+    assert login.status_code == 200
+
+    refresh = await client.post("/api/auth/refresh")
+    assert refresh.status_code == 200
+    assert "access_token" in refresh.json()
+
+
 # ── IBP calculate ─────────────────────────────────────────────────────────────
 
 @pytest.mark.anyio

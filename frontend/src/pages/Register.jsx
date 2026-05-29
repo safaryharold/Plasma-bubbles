@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { formatApiError } from "../lib/api";
+import { LoadingButton } from "../components/Skeleton";
 import { Planet, ArrowRight } from "@phosphor-icons/react";
 
 export default function Register() {
@@ -66,9 +67,14 @@ export default function Register() {
                 className="w-full bg-[#090A0C] border border-[#2A2D35] focus:border-[#0047FF] outline-none px-4 h-12 mono text-sm" />
             </Field>
             {err && <div className="mono text-xs text-[#FF3333] border border-[#FF3333]/40 bg-[#FF3333]/5 px-3 py-2" data-testid="register-error">{err}</div>}
-            <button type="submit" disabled={loading} data-testid="register-submit" className="w-full h-12 bg-[#0047FF] hover:bg-[#336DFF] text-white mono text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-              {loading ? "Creating..." : <>Create account <ArrowRight size={14} /></>}
-            </button>
+            <LoadingButton
+              type="submit"
+              loading={loading}
+              data-testid="register-submit"
+              className="w-full h-12 bg-[#0047FF] hover:bg-[#336DFF] text-white mono text-xs uppercase tracking-[0.25em] justify-center disabled:opacity-50"
+            >
+              {loading ? "Creating…" : <>Create account <ArrowRight size={14} /></>}
+            </LoadingButton>
           </form>
         </div>
       </div>
